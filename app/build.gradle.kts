@@ -22,8 +22,8 @@ android {
         applicationId = "com.yid.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 22
-        versionName = "0.5.1"
+        versionCode = 23
+        versionName = "0.5.2"
     }
 
     signingConfigs {
