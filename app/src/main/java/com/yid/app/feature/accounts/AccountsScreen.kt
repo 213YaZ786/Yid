@@ -1,5 +1,6 @@
 package com.yid.app.feature.accounts
 
+import com.yid.app.ui.component.ZoneSurface
 import com.yid.app.core.link.LinkCleaner
 import com.yid.app.ui.component.CleanLinkEffect
 import com.yid.app.ui.component.rememberHaptics
@@ -17,7 +18,6 @@ import com.yid.app.ui.component.BannerAction
 import com.yid.app.ui.component.ScreenBanner
 import com.yid.app.ui.component.EmptyZone
 import com.yid.app.ui.component.BoldButton
-import com.yid.app.ui.theme.zone
 import com.yid.app.navigation.LocalReadableInset
 import com.yid.app.ui.component.FolderDialog
 import androidx.compose.runtime.remember
@@ -299,10 +299,9 @@ fun AccountsScreen(
 
 @Composable
 private fun AccountCard(row: AccountRow, onClick: () -> Unit, onFile: (() -> Unit)?) {
-    Surface(
+    ZoneSurface(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.zone,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -351,10 +350,11 @@ private fun AccountCard(row: AccountRow, onClick: () -> Unit, onFile: (() -> Uni
 
 @Composable
 private fun CandidateCard(handle: String, onOpen: () -> Unit, onFollow: () -> Unit) {
-    Surface(
+    ZoneSurface(
         onClick = onOpen,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.secondaryContainer,
+        accent = true,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -384,10 +384,9 @@ private fun CandidateCard(handle: String, onOpen: () -> Unit, onFollow: () -> Un
 
 @Composable
 private fun PersonCard(actor: Actor, onOpen: () -> Unit, onFollow: () -> Unit) {
-    Surface(
+    ZoneSurface(
         onClick = onOpen,
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.zone,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(

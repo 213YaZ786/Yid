@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The ground in soft zones, lighter and darker, like glass: a grey bitmap
+     multiplied by a quiet tone of the wallpaper's second accent. By night
+     the zones are deeper, still well above the dark bat. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/yid_ground_day"
+    android:tint="@color/ic_launcher_ground"
+    android:tintMode="multiply" />

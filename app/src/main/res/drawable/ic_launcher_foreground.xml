@@ -1,35 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Yiḍ launcher glyph: a moth at night, drawn to a crescent moon, under
-     a few stars. The moth is one even-odd path, wings folded into a triangle
-     whose inner edges follow its slender body, plumed antennae, and a spot on
-     each wing that shows the background. The stars have four points so they
-     never read as those spots, and the moon stands apart from the moth, so
-     the shapes stay distinct when the system tints them all in one colour as
-     the themed icon. Everything sits inside the 66 dp safe zone.
-     No fixed paint: the colours are dynamic palette resources, see
-     res/values/colors.xml. As the monochrome layer the system replaces the
-     tint anyway, so both the plain and the themed icon follow the wallpaper. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path
-        android:fillColor="@color/ic_launcher_moon"
-        android:pathData="M64.28,29.21 A9.2,9.2 0 1,0 75.79,40.72 A8.3,8.3 0 0,1 64.28,29.21 Z" />
-    <path
-        android:fillColor="@color/ic_launcher_star"
-        android:pathData="M34,37.2 Q34,40 36.8,40 Q34,40 34,42.8 Q34,40 31.2,40 Q34,40 34,37.2 Z M46,27.9 Q46,30 48.1,30 Q46,30 46,32.1 Q46,30 43.9,30 Q46,30 46,27.9 Z M78,63.7 Q78,66 80.3,66 Q78,66 78,68.3 Q78,66 75.7,66 Q78,66 78,63.7 Z" />
-    <group
-        android:pivotX="54"
-        android:pivotY="48"
-        android:scaleX="0.34"
-        android:scaleY="0.34"
-        android:translateX="-6"
-        android:translateY="14">
-        <path
-            android:fillColor="@color/ic_launcher_glyph"
-            android:fillType="evenOdd"
-            android:pathData="M54,31 C55.6,31 57.8,40 59,46 C59.6,60 57.4,78 54,78 C50.6,78 48.4,60 49,46 C50.2,40 52.4,31 54,31 Z M47.69,41 C36,42.5 22,52 16,70 C26,74.5 38,74 47.8,68.5 C47.68,67.58 47.27,64.92 47.08,63 C46.89,61.08 46.75,59 46.65,57 C46.55,55 46.51,52.83 46.5,51 C46.49,49.17 46.4,47.67 46.6,46 C46.8,44.33 47.51,41.83 47.69,41 Z M60.31,41 C72,42.5 86,52 92,70 C82,74.5 70,74 60.2,68.5 C60.32,67.58 60.73,64.92 60.92,63 C61.11,61.08 61.25,59 61.35,57 C61.45,55 61.49,52.83 61.5,51 C61.51,49.17 61.6,47.67 61.4,46 C61.2,44.33 60.49,41.83 60.31,41 Z M30,61 a4.5,4.5 0 1 0 9,0 a4.5,4.5 0 1 0 -9,0 Z M69,61 a4.5,4.5 0 1 0 9,0 a4.5,4.5 0 1 0 -9,0 Z M51,32 C46,31.5 39.5,27 37.5,17 C44,19 49.5,24 51,32 Z M57,32 C62,31.5 68.5,27 70.5,17 C64,19 58.5,24 57,32 Z" />
-    </group>
-</vector>
+<!-- Yiḍ's launcher glyph: a bat among gold stars.
+     The bat is a grey bitmap, its zones taken from a reference image (light
+     body, darker arms and legs, the wings in between), multiplied by a dark
+     tone of the wallpaper's accent, so it follows the wallpaper and keeps
+     its zones. The stars are gold on every wallpaper. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/yid_bat_shadow" />
+    <item>
+        <bitmap
+            android:src="@drawable/yid_bat"
+            android:tint="@color/ic_launcher_bat"
+            android:tintMode="multiply" />
+    </item>
+    <item android:drawable="@drawable/yid_stars" />
+</layer-list>

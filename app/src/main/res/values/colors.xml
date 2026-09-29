@@ -1,21 +1,13 @@
 <resources>
     <!--
-      The launcher icon takes its paint from the wallpaper, like every other
-      surface in the app. These are the platform's own dynamic palette, public
-      since API 31, and minSdk is 31, so there is no fallback to maintain.
+      The launcher icon takes its paint from the wallpaper: the platform's
+      dynamic palette, public since API 31, and minSdk is 31.
 
-      Referenced from the adaptive icon rather than baked into the vector, so
-      the icon follows the wallpaper whether or not themed icons are switched
-      on in the launcher. A themed icon tints the monochrome layer itself and
-      ignores these, which is why both paths end up correct.
-
-      600 against 0: a mid tone of the accent under a near white moth. That
-      pair keeps its contrast on every wallpaper, which a lighter background
-      would not. The moon and the stars take tones in between, the moon the
-      lighter one.
+      The bat: a dark tone of the accent, 700, the body's colour; the bitmap
+      darkens it towards black on the arms and legs. The ground: a quiet
+      tone of the second accent, 50 by day and 300 by night, that its bitmap
+      shades into lighter and darker zones. The stars are gold, fixed.
     -->
-    <color name="ic_launcher_background">@android:color/system_accent1_600</color>
-    <color name="ic_launcher_glyph">@android:color/system_accent1_0</color>
-    <color name="ic_launcher_moon">@android:color/system_accent1_200</color>
-    <color name="ic_launcher_star">@android:color/system_accent1_300</color>
+    <color name="ic_launcher_bat">@android:color/system_accent1_700</color>
+    <color name="ic_launcher_ground">@android:color/system_accent2_50</color>
 </resources>

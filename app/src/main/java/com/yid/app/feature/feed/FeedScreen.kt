@@ -1,5 +1,6 @@
 package com.yid.app.feature.feed
 
+import androidx.compose.ui.graphics.Color
 import com.yid.app.ui.component.RejectOnFailure
 import com.yid.app.ui.component.rememberHaptics
 import com.yid.app.ui.component.LoadingMark
@@ -143,6 +144,9 @@ fun FeedScreen(
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     Scaffold(
+        // The page's ground is painted under the whole app, see MainActivity.
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             FloatingTopBar(

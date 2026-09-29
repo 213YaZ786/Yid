@@ -14,27 +14,42 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.yid.app.R
 import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cbrt
 import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * Yiḍ's loading mark, the launcher icon at night in motion: the moth
- * slowly closes and opens its wings, and two four point stars twinkle in
- * turn beside it.
+ * Yiḍ's loading mark, the launcher icon at rest: the bat stays still and
+ * only the gold stars twinkle, one after another, a glint crossing each at
+ * its brightest.
  *
- * [progress] from 0 to 1 opens the wings and lights the stars as far as a
- * gesture has gone. While [running] they play on their own.
+ * The bat is a grey bitmap multiplied by its colour: the wallpaper's accent,
+ * as deep and as vivid as the dark violet it was drawn in, a lighter tone of
+ * it on a dark page so it never sinks into the page.
+ *
+ * [progress] from 0 to 1 lights the stars as far as a gesture has gone.
+ * While [running] they twinkle on their own.
  */
 @Composable
 fun LoadingMark(
@@ -43,17 +58,15 @@ fun LoadingMark(
     running: Boolean = true,
     progress: Float = 0f
 ) {
-    val moth = MaterialTheme.colorScheme.primary
-    val star = lerp(moth, MaterialTheme.colorScheme.surface, 0.25f)
-    val parts = remember { MothParts() }
+    val bat = ImageBitmap.imageResource(R.drawable.yid_mark_bat)
+    val shadow = ImageBitmap.imageResource(R.drawable.yid_mark_shadow)
+    val star = ImageBitmap.imageResource(R.drawable.yid_mark_star)
+    val scheme = MaterialTheme.colorScheme
+    val darkPage = scheme.background.luminance() < 0.5f
+    val colour = remember(scheme.primary, darkPage) { batColour(scheme.primary, if (darkPage) DARK_PAGE_LIGHTNESS else BODY_LIGHTNESS) }
+    val tint = remember(colour) { ColorFilter.tint(colour, BlendMode.Modulate) }
 
-    val transition = rememberInfiniteTransition(label = "fluttering moth")
-    val beat by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(BEAT_MILLIS, easing = LinearEasing), RepeatMode.Restart),
-        label = "beat"
-    )
+    val transition = rememberInfiniteTransition(label = "twinkling stars")
     val twinkle by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -61,65 +74,122 @@ fun LoadingMark(
         label = "twinkle"
     )
 
-    // Wings at full width when open, a third of it when closed: seen from
-    // above, closing wings narrow rather than vanish.
-    val open = if (running) 1f - CLOSED * ease((1f - cos(2f * PI.toFloat() * beat)) / 2f) else 1f - CLOSED * (1f - progress)
-    val glows = STARS.indices.map { i ->
-        if (running) sin(PI.toFloat() * ((twinkle + i / STARS.size.toFloat()) % 1f)) else progress
-    }
-
     Canvas(modifier.size(size)) {
-        val unit = this.size.minDimension / 100f
+        val side = this.size.minDimension
+        val box = IntSize(side.roundToInt(), side.roundToInt())
+        drawImage(shadow, dstSize = box, filterQuality = FilterQuality.Medium)
+        drawImage(bat, dstSize = box, colorFilter = tint, filterQuality = FilterQuality.Medium)
         STARS.forEachIndexed { i, (x, y, reach) ->
-            val glow = glows[i]
-            if (glow > 0.01f) drawSparkle(Offset(x * unit, y * unit), reach * unit * (0.4f + 0.6f * glow), star.copy(alpha = glow))
-        }
-        // The moth sits a little low, under the stars, as in the icon.
-        translate(50f * unit - 54f, 52f * unit - 48f) {
-            scale(MOTH_SCALE * unit, pivot = Offset(54f, 48f)) {
-                scale(open, 1f, pivot = Offset(54f, 48f)) {
-                    drawPath(parts.left, moth)
-                    drawPath(parts.right, moth)
-                }
-                drawPath(parts.body, moth)
-            }
+            val glow = if (running) glowAt(twinkle, i) else progress.coerceIn(0f, 1f)
+            val centre = Offset((x - FROM) / SPAN * side, (y - FROM) / SPAN * side)
+            drawStar(star, centre, reach / SPAN * side, glow)
         }
     }
 }
 
-private class MothParts {
-    val left = path(LEFT_WING)
-    val right = path(RIGHT_WING)
-    val body = path(BODY)
-
-    private fun path(data: String): Path =
-        PathParser().parsePathString(data).toPath().apply { fillType = PathFillType.EvenOdd }
+/** A star bright for the first part of its turn, then resting, each at its own moment. */
+private fun glowAt(t: Float, i: Int): Float {
+    val p = (t + i * 0.37f) % 1f
+    return if (p < 0.625f) max(0f, sin(PI.toFloat() * p * 1.6f)) else 0f
 }
 
-private fun DrawScope.drawSparkle(centre: Offset, reach: Float, colour: Color) {
-    val (x, y) = centre
-    val sparkle = Path().apply {
-        moveTo(x, y - reach)
-        quadraticTo(x, y, x + reach, y)
-        quadraticTo(x, y, x, y + reach)
-        quadraticTo(x, y, x - reach, y)
-        quadraticTo(x, y, x, y - reach)
-        close()
+/** One star of [reach] around [centre]: it grows a little and brightens, and glints at its peak. */
+private fun DrawScope.drawStar(star: ImageBitmap, centre: Offset, reach: Float, glow: Float) {
+    // The star bitmap holds a reach of STAR_REACH over its whole side of STAR_SIDE.
+    val side = STAR_SIDE / STAR_REACH * reach * (0.86f + 0.2f * glow)
+    val half = side / 2f
+    val offset = IntOffset((centre.x - half).roundToInt(), (centre.y - half).roundToInt())
+    val box = IntSize(side.roundToInt().coerceAtLeast(1), side.roundToInt().coerceAtLeast(1))
+    drawImage(star, dstOffset = offset, dstSize = box, filterQuality = FilterQuality.Medium)
+    if (glow > 0f) drawImage(star, dstOffset = offset, dstSize = box, alpha = 0.3f * glow, blendMode = BlendMode.Plus, filterQuality = FilterQuality.Medium)
+    val flare = glow.pow(4)
+    if (flare < 0.02f) return
+    val ray = reach * 1.9f
+    val thick = reach * 0.16f
+    rotate(45f, centre) {
+        for (turn in 0..1) rotate(90f * turn, centre) {
+            drawRect(
+                Brush.horizontalGradient(
+                    0f to Color.Transparent, 0.5f to RAY.copy(alpha = 0.55f * flare), 1f to Color.Transparent,
+                    startX = centre.x - ray, endX = centre.x + ray
+                ),
+                topLeft = Offset(centre.x - ray, centre.y - thick / 2f),
+                size = Size(2f * ray, thick),
+                blendMode = BlendMode.Plus
+            )
+        }
     }
-    drawPath(sparkle, colour)
+    drawCircle(
+        Brush.radialGradient(listOf(RAY.copy(alpha = 0.35f * flare), Color.Transparent), centre, reach * 1.6f),
+        radius = reach * 1.6f, center = centre, blendMode = BlendMode.Plus
+    )
 }
 
-private fun ease(t: Float) = if (t < 0.5f) 2f * t * t else 1f - (-2f * t + 2f).let { it * it } / 2f
+/**
+ * The bat's colour for this theme: the hue of [primary], at [lightness] in
+ * OKLab, with the given violet's vividness, the same share of the most
+ * vivid colour that hue allows at that lightness.
+ */
+private fun batColour(primary: Color, lightness: Float): Color {
+    val (_, a, b) = toOklab(primary)
+    val hue = atan2(b, a)
+    var lo = 0f
+    var hi = 0.4f
+    repeat(24) {
+        val mid = (lo + hi) / 2f
+        if (inGamut(lightness, mid, hue)) lo = mid else hi = mid
+    }
+    return fromOklch(lightness, VIVIDNESS * lo, hue)
+}
 
-// The moth of the launcher icon, wings apart from the body so they can move.
-private const val LEFT_WING = "M47.69,41 C36,42.5 22,52 16,70 C26,74.5 38,74 47.8,68.5 C47.68,67.58 47.27,64.92 47.08,63 C46.89,61.08 46.75,59 46.65,57 C46.55,55 46.51,52.83 46.5,51 C46.49,49.17 46.4,47.67 46.6,46 C46.8,44.33 47.51,41.83 47.69,41 Z M30,61 a4.5,4.5 0 1 0 9,0 a4.5,4.5 0 1 0 -9,0 Z"
-private const val RIGHT_WING = "M60.31,41 C72,42.5 86,52 92,70 C82,74.5 70,74 60.2,68.5 C60.32,67.58 60.73,64.92 60.92,63 C61.11,61.08 61.25,59 61.35,57 C61.45,55 61.49,52.83 61.5,51 C61.51,49.17 61.6,47.67 61.4,46 C61.2,44.33 60.49,41.83 60.31,41 Z M69,61 a4.5,4.5 0 1 0 9,0 a4.5,4.5 0 1 0 -9,0 Z"
-private const val BODY = "M54,31 C55.6,31 57.8,40 59,46 C59.6,60 57.4,78 54,78 C50.6,78 48.4,60 49,46 C50.2,40 52.4,31 54,31 Z M51,32 C46,31.5 39.5,27 37.5,17 C44,19 49.5,24 51,32 Z M57,32 C62,31.5 68.5,27 70.5,17 C64,19 58.5,24 57,32 Z"
+private fun toOklab(c: Color): Triple<Float, Float, Float> {
+    fun lin(v: Float) = if (v <= 0.04045f) v / 12.92f else ((v + 0.055f) / 1.055f).pow(2.4f)
+    val r = lin(c.red); val g = lin(c.green); val b = lin(c.blue)
+    val l = cbrt(0.4122214708f * r + 0.5363325363f * g + 0.0514459929f * b)
+    val m = cbrt(0.2119034982f * r + 0.6806995451f * g + 0.1073969566f * b)
+    val s = cbrt(0.0883024619f * r + 0.2817188376f * g + 0.6299787005f * b)
+    return Triple(
+        0.2104542553f * l + 0.7936177850f * m - 0.0040720468f * s,
+        1.9779984951f * l - 2.4285922050f * m + 0.4505937099f * s,
+        0.0259040371f * l + 0.7827717662f * m - 0.8086757660f * s
+    )
+}
 
-/** Where the stars twinkle and how far their points reach, in hundredths of the mark. */
-private val STARS = listOf(Triple(18f, 24f, 7f), Triple(84f, 30f, 5.5f))
+private fun linear(lightness: Float, chroma: Float, hue: Float): FloatArray {
+    val a = chroma * cos(hue); val b = chroma * sin(hue)
+    val l = (lightness + 0.3963377774f * a + 0.2158037573f * b).pow(3)
+    val m = (lightness - 0.1055613458f * a - 0.0638541728f * b).pow(3)
+    val s = (lightness - 0.0894841775f * a - 1.2914855480f * b).pow(3)
+    return floatArrayOf(
+        4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s,
+        -1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s,
+        -0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s
+    )
+}
 
-private const val MOTH_SCALE = 0.62f
-private const val CLOSED = 0.7f
-private const val BEAT_MILLIS = 1400
-private const val TWINKLE_MILLIS = 1800
+private fun inGamut(lightness: Float, chroma: Float, hue: Float) =
+    linear(lightness, chroma, hue).all { it in -0.0001f..1.0001f }
+
+private fun fromOklch(lightness: Float, chroma: Float, hue: Float): Color {
+    fun srgb(v: Float) = v.coerceIn(0f, 1f).let { if (it <= 0.0031308f) 12.92f * it else 1.055f * it.pow(1f / 2.4f) - 0.055f }
+    val (r, g, b) = linear(lightness, chroma, hue).map(::srgb)
+    return Color(r, g, b)
+}
+
+/** The stars of the icon, on its 108 dp grid: centre and reach. The mark shows SPAN dp from FROM. */
+private val STARS = listOf(
+    Triple(54f, 37.5f, 5.4f), Triple(42.5f, 30.5f, 3.0f), Triple(65.5f, 29.5f, 3.6f),
+    Triple(34.5f, 73.5f, 3.4f), Triple(73.5f, 74f, 4.0f)
+)
+private const val FROM = 22f
+private const val SPAN = 64f
+private const val STAR_REACH = 5f
+private const val STAR_SIDE = 16f
+private val RAY = Color(0xFFFFFAE6)
+
+/** The body's lightness, and a lighter one for a dark page, in OKLab. */
+private const val BODY_LIGHTNESS = 0.32f
+private const val DARK_PAGE_LIGHTNESS = 0.52f
+/** How vivid the given dark violet #341539 is, as a share of the most vivid colour of its hue and lightness. */
+private const val VIVIDNESS = 0.61f
+private const val TWINKLE_MILLIS = 2600
