@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Yiḍ's launcher glyph: a bat among gold stars.
-     The bat is a grey bitmap, its zones taken from a reference image (light
-     body, darker arms and legs, the wings in between), multiplied by a dark
-     tone of the wallpaper's accent, so it follows the wallpaper and keeps
-     its zones. The stars are gold on every wallpaper. -->
+<!-- Yiḍ's launcher glyph: a bat hanging under a gold crescent, a gold star
+     on its folded wings. The bat is a grey bitmap in soft relief multiplied
+     by a dark tone of the wallpaper's accent, with a faint white sheen; the
+     crescent and the star are gold on every wallpaper. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/yid_bat_shadow" />
+    <item android:drawable="@drawable/yid_shadow" />
+    <item android:drawable="@drawable/yid_crescent" />
     <item>
         <bitmap
             android:src="@drawable/yid_bat"
             android:tint="@color/ic_launcher_bat"
             android:tintMode="multiply" />
     </item>
-    <item android:drawable="@drawable/yid_stars" />
+    <item android:drawable="@drawable/yid_bat_sheen" />
+    <item android:drawable="@drawable/yid_star" />
 </layer-list>

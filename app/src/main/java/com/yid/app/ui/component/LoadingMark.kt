@@ -40,16 +40,16 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * Yiḍ's loading mark, the launcher icon at rest: the bat stays still and
- * only the gold stars twinkle, one after another, a glint crossing each at
- * its brightest.
+ * Yiḍ's loading mark, the launcher icon at rest: the bat hangs still under
+ * its gold crescent and only the gold star on its wings twinkles, a glint
+ * crossing it at its brightest.
  *
- * The bat is a grey bitmap multiplied by its colour: the wallpaper's accent,
- * as deep and as vivid as the dark violet it was drawn in, a lighter tone of
- * it on a dark page so it never sinks into the page.
+ * The bat is a grey bitmap in soft relief multiplied by its colour: the
+ * wallpaper's accent, as deep and as vivid as the dark violet it was drawn
+ * in, a lighter tone of it on a dark page so it never sinks into the page.
  *
- * [progress] from 0 to 1 lights the stars as far as a gesture has gone.
- * While [running] they twinkle on their own.
+ * [progress] from 0 to 1 lights the star as far as a gesture has gone.
+ * While [running] it twinkles on its own.
  */
 @Composable
 fun LoadingMark(
@@ -59,6 +59,8 @@ fun LoadingMark(
     progress: Float = 0f
 ) {
     val bat = ImageBitmap.imageResource(R.drawable.yid_mark_bat)
+    val sheen = ImageBitmap.imageResource(R.drawable.yid_mark_sheen)
+    val crescent = ImageBitmap.imageResource(R.drawable.yid_mark_crescent)
     val shadow = ImageBitmap.imageResource(R.drawable.yid_mark_shadow)
     val star = ImageBitmap.imageResource(R.drawable.yid_mark_star)
     val scheme = MaterialTheme.colorScheme
@@ -66,7 +68,7 @@ fun LoadingMark(
     val colour = remember(scheme.primary, darkPage) { batColour(scheme.primary, if (darkPage) DARK_PAGE_LIGHTNESS else BODY_LIGHTNESS) }
     val tint = remember(colour) { ColorFilter.tint(colour, BlendMode.Modulate) }
 
-    val transition = rememberInfiniteTransition(label = "twinkling stars")
+    val transition = rememberInfiniteTransition(label = "twinkling star")
     val twinkle by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -78,7 +80,9 @@ fun LoadingMark(
         val side = this.size.minDimension
         val box = IntSize(side.roundToInt(), side.roundToInt())
         drawImage(shadow, dstSize = box, filterQuality = FilterQuality.Medium)
+        drawImage(crescent, dstSize = box, filterQuality = FilterQuality.Medium)
         drawImage(bat, dstSize = box, colorFilter = tint, filterQuality = FilterQuality.Medium)
+        drawImage(sheen, dstSize = box, filterQuality = FilterQuality.Medium)
         STARS.forEachIndexed { i, (x, y, reach) ->
             val glow = if (running) glowAt(twinkle, i) else progress.coerceIn(0f, 1f)
             val centre = Offset((x - FROM) / SPAN * side, (y - FROM) / SPAN * side)
@@ -176,13 +180,14 @@ private fun fromOklch(lightness: Float, chroma: Float, hue: Float): Color {
     return Color(r, g, b)
 }
 
-/** The stars of the icon, on its 108 dp grid: centre and reach. The mark shows SPAN dp from FROM. */
-private val STARS = listOf(
-    Triple(54f, 37.5f, 5.4f), Triple(42.5f, 30.5f, 3.0f), Triple(65.5f, 29.5f, 3.6f),
-    Triple(34.5f, 73.5f, 3.4f), Triple(73.5f, 74f, 4.0f)
-)
-private const val FROM = 22f
-private const val SPAN = 64f
+/**
+ * The star of the icon, on its 108 dp grid: centre and reach, halfway
+ * between the crescent's top and the ears' tips. The mark shows SPAN dp of
+ * the grid from FROM.
+ */
+private val STARS = listOf(Triple(54f, 55.84f, 5f))
+private const val FROM = 20f
+private const val SPAN = 70f
 private const val STAR_REACH = 5f
 private const val STAR_SIDE = 16f
 private val RAY = Color(0xFFFFFAE6)
