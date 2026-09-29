@@ -1,5 +1,6 @@
 package com.yid.app.di
 
+import com.yid.app.data.marks.PostMarks
 import com.yid.app.core.link.RedirectResolver
 import com.yid.app.core.debug.LogExporter
 import com.yid.app.core.debug.RequestLog
@@ -59,6 +60,7 @@ val appModule = module {
     single { MediaSavingNotice(androidContext(), get(named("appScope"))) }
     single { AutoMediaDownloader(get(), get(), get(), get(), get(), get()) }
     single { AccountStore(androidContext()) }
+    single { PostMarks(androidContext()) }
     single { LinkRouter() }
     single { FeedRepository(get()) }
     single {
