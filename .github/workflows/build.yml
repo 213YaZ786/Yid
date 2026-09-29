@@ -93,20 +93,20 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/afertettu-release.jks"
-          if [ ! -s "$RUNNER_TEMP/afertettu-release.jks" ]
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/yid-release.jks"
+          if [ ! -s "$RUNNER_TEMP/yid-release.jks" ]
           then
             echo "::error::The keystore secret is not valid base64."
             echo "ready=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
-          echo "keystore restored, $(stat -c%s "$RUNNER_TEMP/afertettu-release.jks") bytes"
+          echo "keystore restored, $(stat -c%s "$RUNNER_TEMP/yid-release.jks") bytes"
           mkdir -p ~/.gradle
           cat >> ~/.gradle/gradle.properties <<EOF
-          afertettu.storeFile=$RUNNER_TEMP/afertettu-release.jks
-          afertettu.storePassword=$KEYSTORE_PASSWORD
-          afertettu.keyAlias=$KEY_ALIAS
-          afertettu.keyPassword=$KEY_PASSWORD
+          yid.storeFile=$RUNNER_TEMP/yid-release.jks
+          yid.storePassword=$KEYSTORE_PASSWORD
+          yid.keyAlias=$KEY_ALIAS
+          yid.keyPassword=$KEY_PASSWORD
           EOF
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
@@ -116,7 +116,7 @@ jobs:
       - name: Build and test
         run: gradle --stacktrace assembleDebug assembleRelease testDebugUnitTest
 
-      # No ABI splits: Afertettu ships no native code of its own, so every
+      # No ABI splits: Yiḍ ships no native code of its own, so every
       # split would be the same bytes under a different name. The two builds
       # that do differ are the signed release and the debug one, and both are
       # named and hashed.
@@ -128,8 +128,8 @@ jobs:
           # still named, hashed and checked, only never published.
           RELEASE=app/build/outputs/apk/release/app-release.apk
           [ -f "$RELEASE" ] || RELEASE=app/build/outputs/apk/release/app-release-unsigned.apk
-          cp "$RELEASE" "release/Afertettu-$VERSION.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "release/Afertettu-$VERSION-debug.apk"
+          cp "$RELEASE" "release/Yid-$VERSION.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "release/Yid-$VERSION-debug.apk"
           ( cd release && sha256sum ./*.apk > SHA256SUMS.txt )
           cat release/SHA256SUMS.txt
 
@@ -140,7 +140,7 @@ jobs:
       - name: Check release permissions
         run: |
           AAPT2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)aapt2"
-          "$AAPT2" dump permissions "release/Afertettu-$VERSION.apk" | tee permissions.txt
+          "$AAPT2" dump permissions "release/Yid-$VERSION.apk" | tee permissions.txt
           if grep -E "uses-permission" permissions.txt \
             | grep -v "android.permission.INTERNET" \
             | grep -v "android.permission.ACCESS_NETWORK_STATE" \
@@ -151,7 +151,7 @@ jobs:
             | grep -v "android.permission.RECEIVE_BOOT_COMPLETED" \
             | grep -v "android.permission.FOREGROUND_SERVICE" \
             | grep -v "android.permission.FOREGROUND_SERVICE_DATA_SYNC" \
-            | grep -v "com.afertettu.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+            | grep -v "com.yid.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
           then
             echo "::error::Unexpected permission in the release APK"
             exit 1
@@ -163,7 +163,7 @@ jobs:
       - name: Check the release is not debuggable
         run: |
           AAPT2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)aapt2"
-          if "$AAPT2" dump badging "release/Afertettu-$VERSION.apk" | grep -q "application-debuggable"
+          if "$AAPT2" dump badging "release/Yid-$VERSION.apk" | grep -q "application-debuggable"
           then
             echo "::error::The release APK is debuggable"
             exit 1
@@ -175,7 +175,7 @@ jobs:
       - name: Write the summary
         run: |
           {
-            echo "## Afertettu $VERSION (versionCode $CODE)"
+            echo "## Yiḍ $VERSION (versionCode $CODE)"
             echo
             echo "| File | Size | SHA-256 |"
             echo "| --- | --- | --- |"
@@ -197,7 +197,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: afertettu-reports
+          name: yid-reports
           path: |
             app/build/reports/tests/
             app/build/reports/lint-results-release.html
@@ -206,7 +206,7 @@ jobs:
       - name: Upload the APKs
         uses: actions/upload-artifact@v7
         with:
-          name: afertettu-apks
+          name: yid-apks
           path: release/*
           if-no-files-found: error
 
@@ -219,11 +219,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v$VERSION"
-          TITLE="Afertettu $VERSION"
+          TITLE="Yiḍ $VERSION"
           if gh release view "$TAG" > /dev/null 2>&1
           then
             TAG="v$VERSION-b$GITHUB_RUN_NUMBER"
-            TITLE="Afertettu $VERSION (build $GITHUB_RUN_NUMBER)"
+            TITLE="Yiḍ $VERSION (build $GITHUB_RUN_NUMBER)"
           fi
           {
             echo "versionCode $CODE"

@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Afertettu"
+rootProject.name = "Yid"
 include(":app")

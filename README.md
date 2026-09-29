@@ -1,4 +1,4 @@
-# Afertettu
+# Yiḍ
 
 Read public Bluesky posts on Android, with no account, no tracking and no ads.
 
@@ -20,11 +20,11 @@ Read public Bluesky posts on Android, with no account, no tracking and no ads.
 - A link copied from a search engine or another site is cleaned on your phone, so it leads straight to the page. Google's own result links hide the address: for those only, the app asks Google once where the link leads, without cookies, and opens nothing there.
 - The accounts you follow and the posts you saved never leave your phone.
 - Posts come from Bluesky's public API, which answers anyone without an account. Bluesky sees which profiles and posts the app reads, as it would from its own website.
-- Few permissions: internet access and network status, notifications only if you turn on new post alerts or automatic saving, one that lets a batch of saves show a single progress line instead of one per file, and one that asks Android, when you turn on background checks, to leave Afertettu out of battery optimisation so the checks are not postponed.
+- Few permissions: internet access and network status, notifications only if you turn on new post alerts or automatic saving, one that lets a batch of saves show a single progress line instead of one per file, and one that asks Android, when you turn on background checks, to leave Yiḍ out of battery optimisation so the checks are not postponed.
 
 ## Install
 
-Download the latest APK from [Releases](https://github.com/213YaZ786/Afertettu/releases) and install it. Android 12 or newer is required. Each release lists the SHA-256 of its files in `SHA256SUMS.txt`.
+Download the latest APK from [Releases](https://github.com/213YaZ786/Yid/releases) and install it. Android 12 or newer is required. Each release lists the SHA-256 of its files in `SHA256SUMS.txt`.
 
 ## Having a problem?
 

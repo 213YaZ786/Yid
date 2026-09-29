@@ -6,34 +6,34 @@ plugins {
 }
 
 android {
-    namespace = "com.afertettu.app"
+    namespace = "com.yid.app"
     // 37 because Compose 1.12 compiles against it. targetSdk is 37 since
     // 2.4.0, after reading every Android 17 change for apps targeting it.
-    // What applies to Afertettu: certificate transparency and Encrypted Client
+    // What applies to Yiḍ: certificate transparency and Encrypted Client
     // Hello turn on for its https connections (stricter, nothing to change),
     // background audio is restricted (players already pause when the app
     // leaves the screen), and large screens ignore orientation and
-    // resizability limits (Afertettu sets none). Widgets, contacts, SMS, Bluetooth,
+    // resizability limits (Yiḍ sets none). Widgets, contacts, SMS, Bluetooth,
     // local network, native code loading and reflection on MessageQueue or
     // static final fields are not used.
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.afertettu.app"
+        applicationId = "com.yid.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 11
-        versionName = "0.1.10"
+        versionCode = 12
+        versionName = "0.2.0"
     }
 
     signingConfigs {
         create("release") {
-            val storeFilePath = providers.gradleProperty("afertettu.storeFile").orNull
+            val storeFilePath = providers.gradleProperty("yid.storeFile").orNull
             if (storeFilePath != null) {
                 storeFile = file(storeFilePath)
-                storePassword = providers.gradleProperty("afertettu.storePassword").orNull
-                keyAlias = providers.gradleProperty("afertettu.keyAlias").orNull
-                keyPassword = providers.gradleProperty("afertettu.keyPassword").orNull
+                storePassword = providers.gradleProperty("yid.storePassword").orNull
+                keyAlias = providers.gradleProperty("yid.keyAlias").orNull
+                keyPassword = providers.gradleProperty("yid.keyPassword").orNull
             }
         }
     }
@@ -46,7 +46,7 @@ android {
         release {
             // Only attached when the signing properties are supplied, so a
             // local build without a keystore still produces an unsigned APK.
-            if (providers.gradleProperty("afertettu.storeFile").isPresent) {
+            if (providers.gradleProperty("yid.storeFile").isPresent) {
                 signingConfig = signingConfigs.getByName("release")
             }
             isMinifyEnabled = false
