@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The ground in soft zones, lighter and darker, like glass: a grey bitmap
-     multiplied by a quiet tone of the wallpaper's second accent. By night
-     the zones are deeper, still well above the dark bat. -->
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@drawable/yid_ground_day"
-    android:tint="@color/ic_launcher_ground"
-    android:tintMode="multiply" />
+<!--
+    A plain square in the wallpaper's palest tone by day, a deep neutral by
+    night, as for the other apps. The mask is the launcher's business.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M0,0 H108 V108 H0 Z"
+        android:fillColor="@color/ic_launcher_background" />
+</vector>

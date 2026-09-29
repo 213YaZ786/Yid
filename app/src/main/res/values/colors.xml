@@ -3,11 +3,12 @@
       The launcher icon takes its paint from the wallpaper: the platform's
       dynamic palette, public since API 31, and minSdk is 31.
 
-      The bat: a dark tone of the accent, 700, the body's colour; the bitmap
-      darkens it towards black on the arms and legs. The ground: a quiet
-      tone of the second accent, 50 by day and 300 by night, that its bitmap
-      shades into lighter and darker zones. The stars are gold, fixed.
+      As for MTGA and LinkedOut, the ground is the palest tone of the accent
+      by day and a deep neutral by night. The bat is a dark tone of the
+      accent, 700, by day and a light one, 300, by night, so it stands out of
+      either ground; its bitmap only shades it. The crescent and the star
+      are gold, fixed.
     -->
+    <color name="ic_launcher_background">@android:color/system_accent1_50</color>
     <color name="ic_launcher_bat">@android:color/system_accent1_700</color>
-    <color name="ic_launcher_ground">@android:color/system_accent2_50</color>
 </resources>
