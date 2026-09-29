@@ -125,7 +125,7 @@ class MediaDownloader(
             else -> guessExtension(url, "mp4")
         }
         val stamp = System.currentTimeMillis()
-        return "yiḍ_${authorHandle}_$stamp.$extension"
+        return "yid_${authorHandle}_$stamp.$extension"
     }
 
     private fun guessExtension(url: String, fallback: String): String {

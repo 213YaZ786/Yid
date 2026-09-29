@@ -19,7 +19,8 @@ import io.ktor.client.request.header
  */
 object HttpClientFactory {
 
-    const val USER_AGENT = "Yiḍ/${BuildConfig.VERSION_NAME} (+https://github.com/213YaZ786/Yiḍ)"
+    // Plain ASCII: an HTTP header cannot carry the dot under the d.
+    const val USER_AGENT = "Yid/${BuildConfig.VERSION_NAME} (+https://github.com/213YaZ786/Yid)"
 
     const val CONNECT_TIMEOUT_MS = 8_000L
     const val REQUEST_TIMEOUT_MS = 15_000L

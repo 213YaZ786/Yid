@@ -133,12 +133,12 @@ fun YidApp() {
         // Every screen that shows media can now ask for the saved copy.
         LocalOfflineMedia provides offlineMedia
     ) {
-        YiḍNavHost(navController)
+        YidNavHost(navController)
     }
 }
 
 @Composable
-private fun YiḍNavHost(navController: NavHostController) {
+private fun YidNavHost(navController: NavHostController) {
     // This Scaffold is the only owner of the window insets. Screens below open
     // their own Scaffold with a TopAppBar, and without consuming here each of
     // them would add the status bar and the navigation bar a second time,

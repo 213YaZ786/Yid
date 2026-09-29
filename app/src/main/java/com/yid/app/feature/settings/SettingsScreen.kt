@@ -373,7 +373,7 @@ fun SettingsScreen(
             )
             SettingRow(
                 title = "Import accounts",
-                summary = "From an Yiḍ export, or a text file of handles or bsky.app links.",
+                summary = "From a Yiḍ export, or a text file of handles or bsky.app links.",
                 onClick = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
             )
         }
@@ -399,8 +399,8 @@ fun SettingsScreen(
             )
             SettingRow(
                 title = "Source code",
-                summary = "github.com/213YaZ786/Yiḍ",
-                onClick = { uriHandler.openUri("https://github.com/213YaZ786/Yiḍ") }
+                summary = "github.com/213YaZ786/Yid",
+                onClick = { uriHandler.openUri("https://github.com/213YaZ786/Yid") }
             )
             SettingRow(
                 title = "Thanks",
