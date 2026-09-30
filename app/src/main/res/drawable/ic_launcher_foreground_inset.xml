@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The glyph a little smaller than its canvas, so the crescent keeps clear
+     of the launcher's mask and the icon sits centred in the app drawer. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_launcher_foreground"
+    android:inset="7%" />
