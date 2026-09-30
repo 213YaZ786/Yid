@@ -3,4 +3,7 @@
      of the launcher's mask and the icon sits centred in the app drawer. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/ic_launcher_foreground"
-    android:inset="7%" />
+    android:insetLeft="7%"
+    android:insetRight="7%"
+    android:insetTop="5.5%"
+    android:insetBottom="8.5%" />
