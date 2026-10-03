@@ -16,4 +16,12 @@ class UpdatesTest {
         assertFalse(Updates.isNewer("0.3.4", "0.3.4-debug"))
         assertTrue(Updates.isNewer("0.3.5", "0.3.4-debug"))
     }
+
+    @Test
+    fun `only files of this app's own releases are fetched`() {
+        assertTrue(Updates.fromRepo("https://github.com/213YaZ786/Yid/releases/download/v1.0.0/Yid-1.0.0.apk"))
+        assertFalse(Updates.fromRepo("http://github.com/213YaZ786/Yid/releases/download/v1.0.0/a.apk"))
+        assertFalse(Updates.fromRepo("https://github.com/someone/Yid/releases/download/v1.0.0/a.apk"))
+        assertFalse(Updates.fromRepo("https://github.com.evil.example/213YaZ786/Yid/releases/download/a.apk"))
+    }
 }
