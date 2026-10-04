@@ -1,5 +1,6 @@
 package com.yid.app.feature.accounts
 
+import com.yid.app.ui.component.GlassSearchField
 import com.yid.app.ui.component.ZoneSurface
 import com.yid.app.core.link.LinkCleaner
 import com.yid.app.ui.component.CleanLinkEffect
@@ -45,8 +46,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -208,12 +207,10 @@ fun AccountsScreen(
                 }
             }
             item(key = "search") {
-                TextField(
+                GlassSearchField(
                     value = query,
                     onValueChange = { query = it },
-                    singleLine = true,
-                    shape = RoundedCornerShape(28.dp),
-                    placeholder = { Text("Search people or paste a link") },
+                    placeholder = "Search people or paste a link",
                     leadingIcon = { Icon(YidIcons.Search, contentDescription = null) },
                     trailingIcon = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -230,13 +227,6 @@ fun AccountsScreen(
                             }
                         }
                     },
-                    colors = TextFieldDefaults.colors(
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                    ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = {
                         when {
