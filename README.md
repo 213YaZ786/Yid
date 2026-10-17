@@ -34,4 +34,6 @@ Open **Settings > Activity log**, tap "Save to Downloads", and attach the file t
 
 To Bluesky for an open protocol and a public API that a small reader can use without asking.
 
+Links are checked before they open, after [URLCheck](https://github.com/TrianguloY/URLCheck) (CC BY 4.0). The tracking rules are [ClearURLs](https://github.com/ClearURLs/Rules) (LGPL-3.0), the site names come from the [Public Suffix List](https://publicsuffix.org) (MPL-2.0).
+
 MIT licensed.
