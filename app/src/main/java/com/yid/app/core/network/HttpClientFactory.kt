@@ -25,9 +25,20 @@ object HttpClientFactory {
     const val CONNECT_TIMEOUT_MS = 8_000L
     const val REQUEST_TIMEOUT_MS = 15_000L
 
+    /**
+     * The biggest answer taken. The largest real one measured 2026-10-17 was
+     * a busy post thread, 425 kB (a feed page of 30 posts: 70 to 200 kB, a
+     * search 20 kB); 4 MB leaves ten times that and stops a hostile or
+     * broken answer from being read whole into memory.
+     */
+    const val MAX_BODY_BYTES = 4L * 1024 * 1024
+
     fun create(): HttpClient = HttpClient(OkHttp) {
         expectSuccess = false
         followRedirects = true
+
+        // Ported from Signal-Android's OkHttpUtil size limit, see ResponseLimit.
+        engine { addInterceptor(ResponseLimit(MAX_BODY_BYTES)) }
 
         install(HttpTimeout) {
             connectTimeoutMillis = CONNECT_TIMEOUT_MS
