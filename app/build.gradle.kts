@@ -22,8 +22,8 @@ android {
         applicationId = "com.yid.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 40
-        versionName = "0.5.19"
+        versionCode = 41
+        versionName = "0.5.20"
     }
 
     signingConfigs {
@@ -93,6 +93,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.graphics.shapes)
     implementation(libs.androidx.navigation.compose)
 
     implementation(libs.kotlinx.serialization.json)
