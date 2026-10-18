@@ -182,7 +182,7 @@ private fun ConversationView(
             postId = shown.id,
             media = shown.media,
             startIndex = index,
-            onDownload = { downloader.download(it, shown.authorHandle) },
+            onDownload = { downloader.download(it, shown.authorHandle, shown.permalink) },
             onDismiss = { viewing = null }
         )
     }
@@ -193,7 +193,7 @@ private fun ConversationView(
             post = item,
             onClick = { onOpenPost(item) },
             onOpenLink = { uriHandler.openUri(it) },
-            onDownload = { downloader.download(it, item.authorHandle) },
+            onDownload = { downloader.download(it, item.authorHandle, item.permalink) },
             showStats = settings.showCounts,
             onOpenMedia = { index -> viewing = item to index },
             modifier = modifier
@@ -390,7 +390,7 @@ private fun PostBody(
         if (post.media.isNotEmpty()) {
             MediaBlock(
                 post = post,
-                onDownload = { downloader.download(it, post.authorHandle) },
+                onDownload = { downloader.download(it, post.authorHandle, post.permalink) },
                 onOpen = onOpenMedia
             )
         }
