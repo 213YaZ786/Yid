@@ -187,8 +187,9 @@ private fun NameRow(post: Post) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false)
         )
+        // Name and time joined with a comma, as AOSP Dialer's CallLogEntryText.java (https://android.googlesource.com/platform/packages/apps/Dialer/+/refs/heads/main/java/com/android/dialer/calllogutils/CallLogEntryText.java).
         Text(
-            " · ${relativeTime(post.publishedAtMillis)}",
+            ", ${relativeTime(post.publishedAtMillis)}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1
