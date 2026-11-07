@@ -1,163 +1,94 @@
+/*
+ * The welcome guide as tiles, after FlorisBoard's SetupScreen: every step is read from the system (what is enabled,
+ * selected, allowed) and shown done or not, the tiles are Modules' SetupTiles. Yiḍ's own settings logic of the former
+ * pager (media choice, new post alerts) is kept as it was.
+ *
+ * Copyright (C) 2021-2025 The FlorisBoard Contributors, Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0), translated from
+ * https://github.com/florisboard/florisboard/blob/main/app/src/main/kotlin/dev/patrickgold/florisboard/app/setup/SetupScreen.kt
+ */
 package com.yid.app.feature.welcome
 
-import androidx.compose.foundation.layout.systemBarsPadding
-import com.yid.app.core.update.UpdateMode
-import com.yid.app.core.update.Updates
-import com.yid.app.feature.settings.SettingsViewModel
-import org.koin.androidx.compose.koinViewModel
-import com.yid.app.core.system.BatteryExemption
-import com.yid.app.ui.component.LoadingMark
-import com.yid.app.ui.component.QuietButton
-import com.yid.app.ui.glass.glassZone
-import com.yid.app.ui.glass.LocalGlass
-import com.yid.app.ui.component.BoldButton
-import com.yid.app.ui.component.ZoneSurface
-import com.yid.app.ui.component.rememberHaptics
-import org.koin.compose.koinInject
-import com.yid.app.data.settings.SettingsStore
-import com.yid.app.data.settings.AutoDownload
-import androidx.core.content.ContextCompat
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.compose.rememberLauncherForActivityResult
-import android.os.Build
-import android.content.pm.PackageManager
 import android.Manifest
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.yid.app.core.system.BatteryExemption
+import com.yid.app.data.settings.AutoDownload
+import com.yid.app.data.settings.SettingsStore
+import com.yid.app.feature.settings.SettingsViewModel
+import com.yid.app.ui.component.BoldButton
+import com.yid.app.ui.component.ChoiceDialog
+import com.yid.app.ui.component.LoadingMark
+import com.yid.app.ui.component.SetupTile
+import com.yid.app.ui.component.SetupTileDialog
+import com.yid.app.ui.component.SetupTileGrid
+import com.yid.app.ui.component.leftText
+import com.yid.app.ui.component.requiredDone
+import com.yid.app.ui.component.requiredLeft
 import com.yid.app.ui.icon.YidIcons
-import kotlinx.coroutines.launch
+import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
-private data class WelcomePage(
-    val icon: ImageVector,
-    val title: String,
-    val intro: String,
-    val points: List<String>,
-    /** Shows "bsky.app/profile/nytimes.com" with the handle picked out. */
-    val showLinkExample: Boolean = false,
-    /** The last page asks for a decision instead of explaining anything. */
-    val showMediaChoice: Boolean = false,
-    /** The app's own animation, large, in place of the icon. */
-    val showMark: Boolean = false,
-    val showUpdateChoice: Boolean = false,
-    val showNotifyChoice: Boolean = false
-)
-
-private val PAGES = listOf(
-    WelcomePage(
-        showMark = true,
-        icon = YidIcons.Home,
-        title = "Welcome to Yiḍ",
-        intro = "Read public Bluesky posts with no account, no tracking and no ads.",
-        points = listOf(
-            "You choose the accounts to follow. The list stays on this device.",
-            "Home gathers their newest posts in one timeline."
-        )
-    ),
-    WelcomePage(
-        icon = YidIcons.Person,
-        title = "Find someone",
-        intro = "A Bluesky handle is a whole domain, like @nytimes.com or @jane.bsky.social.",
-        points = listOf(
-            "In Accounts, search a name to find people, no handle needed.",
-            "In a profile link, the handle comes right after bsky.app/profile/ as below.",
-            "Accounts on a custom domain keep it as their handle."
-        ),
-        showLinkExample = true
-    ),
-    WelcomePage(
-        icon = YidIcons.Search,
-        title = "Follow an account",
-        intro = "Three ways to add someone.",
-        points = listOf(
-            "In Accounts, search a name, type a handle or paste a profile link, then tap Follow.",
-            "In the Bluesky app or a browser, share a profile to Yiḍ. It opens here, then tap Follow.",
-            "A list from another app of this family imports in Settings, with its folders."
-        )
-    ),
-    WelcomePage(
-        icon = YidIcons.Folder,
-        title = "Sort into folders",
-        intro = "Folders give one stream each, news in one, friends in another.",
-        points = listOf(
-            "Create them in Accounts with the folder button, then file each account with its chip.",
-            "Home switches between them from its title, and shows every account by default.",
-            "Everything loads when the app opens, so switching folders is instant."
-        )
-    ),
-    WelcomePage(
-        icon = YidIcons.Download,
-        title = "Save media automatically",
-        intro = "Posts saved on the phone open again offline.",
-        points = listOf("Changeable in Settings."),
-        showMediaChoice = true
-    ),
-    WelcomePage(
-        icon = YidIcons.Refresh,
-        title = "Updates",
-        intro = "When a new version is out.",
-        points = listOf("Changeable in Settings."),
-        showUpdateChoice = true
-    ),
-    WelcomePage(
-        icon = YidIcons.Bell,
-        title = "New posts",
-        intro = "A notification when followed accounts post.",
-        points = listOf("Changeable in Settings."),
-        showNotifyChoice = true
-    )
-)
+// not ported: WelcomePage and PAGES (the pager's pages: their texts moved into the tiles' summaries)
+// not ported: PageContent, Dots, Point, LinkExample, accentDisc (the pages' own drawing: the pager is gone)
+// not ported: MediaChoice, Choices, Option (rows of the pager's pages: the tiles open the app's ChoiceDialog instead)
+// not ported: the Updates, Find someone, Follow an account and Sort into folders pages (updates stay on Install, the preset; following and folders are done in Accounts)
+// not ported: awaitTransition (FlorisBoard's wait on a Flow of the system's change: each state is read again at every resume)
+// not ported: flow (FlorisBoard's Flow of step changes: the tiles are read again at every resume instead)
+// not ported: Steps (FlorisBoard's sealed step ids: a tile carries its own string id)
+// not ported: SetupLinks (FlorisBoard's links of its footer: Yiḍ's guide has none)
+// not ported: SetupScreen (the name only: its header, steps and footer are WelcomeContent, its state logic rememberSetupTiles)
 
 /**
- * A short guide shown on first launch, and again from Settings. Five pages:
- * what Yiḍ is, what a handle is and where to find one, how to follow, how to
- * sort into folders, and the one decision that spends the reader's data.
- *
- * [onFinish] receives true when the reader asks to go to Accounts.
+ * The few choices worth making, the best one already set, as tiles: each is read again each time the screen comes
+ * back (SetupScreen reads isFlorisBoardEnabled, isFlorisBoardSelected and hasNotificationPermission, and sets the
+ * current step from them), and turns done by itself. [onFinish] receives true when the reader asks for Accounts.
+ * Ported from rememberSetupTiles of Language
+ * https://github.com/213YaZ786/Language/blob/main/app/src/main/java/com/yaz/language/feature/welcome/WelcomeScreen.kt#rememberSetupTiles
+ * with the settings logic of Yiḍ's former WelcomeScreen
+ * https://github.com/213YaZ786/Yid/blob/main/app/src/main/java/com/yid/app/feature/welcome/WelcomeScreen.kt#WelcomeScreen
+ * Only the choices the reader must make (the user, 2026-11-06: a tile only for an important call, the best preset
+ * for the rest): Save media (spends data, required) and New posts (a permission and checks with the app closed).
+ * Updates stay on Install through Store, following is done in Accounts.
  */
 @Composable
-fun WelcomeScreen(onFinish: (openAccounts: Boolean) -> Unit) {
-    val pager = rememberPagerState(pageCount = { PAGES.size })
-    val scope = rememberCoroutineScope()
-    val last = pager.currentPage == PAGES.lastIndex
+fun rememberSetupTiles(onFinish: (openAccounts: Boolean) -> Unit): List<SetupTile> {
     val settings: SettingsStore = koinInject()
     val context = LocalContext.current
+    var checks by remember { mutableIntStateOf(0) }
+
     // On first launch nothing is picked: this is the only setting that spends
     // the reader's data without asking again, so it is not left as a default
     // they never saw. Reopened from Settings, the current choice is shown.
@@ -166,7 +97,19 @@ fun WelcomeScreen(onFinish: (openAccounts: Boolean) -> Unit) {
     var chosen by remember {
         mutableStateOf(settings.current.takeIf { it.welcomeSeen }?.autoDownloadMedia)
     }
-    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    // New post notifications start from the current settings and ask for
+    // the permission they need when turned on, not before.
+    val sync: SettingsViewModel = koinViewModel()
+    var notify by remember { mutableStateOf(settings.current.backgroundSync && settings.current.notifyNewPosts) }
+    LifecycleResumeEffect(Unit) {
+        checks++
+        notify = settings.current.backgroundSync && settings.current.notifyNewPosts
+        onPauseOrDispose { }
+    }
+    // The choice dialog open ("media"), "" when none.
+    var choosing by rememberSaveable { mutableStateOf("") }
+
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { checks++ }
     val choose: (AutoDownload) -> Unit = { choice ->
         chosen = choice
         // Same as the Settings dialog: the watermark restarts, so what is on
@@ -182,17 +125,6 @@ fun WelcomeScreen(onFinish: (openAccounts: Boolean) -> Unit) {
             askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
-
-    // Updates and new post notifications start from the current settings;
-    // each asks for the permission it needs when turned on, not before.
-    var updates by remember { mutableStateOf(settings.current.updates) }
-    val chooseUpdates: (UpdateMode) -> Unit = { mode ->
-        updates = mode
-        settings.update { it.copy(updates = mode) }
-        if (mode == UpdateMode.INSTALL && !Updates.canInstall(context)) Updates.allowInstalls(context)
-    }
-    val sync: SettingsViewModel = koinViewModel()
-    var notify by remember { mutableStateOf(settings.current.backgroundSync && settings.current.notifyNewPosts) }
     val turnOnNotify = {
         notify = true
         sync.setBackgroundSync(true)
@@ -216,215 +148,115 @@ fun WelcomeScreen(onFinish: (openAccounts: Boolean) -> Unit) {
         }
     }
 
-    // Drawn over the whole window, so it keeps clear of the system bars itself.
-    Column(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 24.dp, vertical = 16.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            QuietButton(onClick = { onFinish(false) }) { Text(if (last) "Close" else "Skip") }
-        }
+    if (choosing == "media") {
+        ChoiceDialog(
+            title = "Save media",
+            options = listOf(
+                AutoDownload.OFF to "Never",
+                AutoDownload.UNMETERED to "On Wi-Fi only",
+                AutoDownload.ANY to "On Wi-Fi or mobile data"
+            ),
+            onPick = choose,
+            onDismiss = { choosing = "" },
+            selected = chosen
+        )
+    }
+    return listOf(
+        SetupTile(
+            id = "media", name = "Save media", title = "Save media automatically", icon = YidIcons.Download,
+            state = when (chosen) {
+                null -> "Not chosen"
+                AutoDownload.OFF -> "Never"
+                AutoDownload.UNMETERED -> "On Wi-Fi only"
+                AutoDownload.ANY -> "On Wi-Fi or mobile data"
+            },
+            summary = "Posts saved on the phone open again offline. It spends data without asking again, so choose: " +
+                "never, on Wi-Fi only, or on Wi-Fi or mobile data. Changeable in Settings.",
+            done = chosen != null, required = true,
+            onClick = { choosing = "media" }
+        ),
+        SetupTile(
+            id = "notify", name = "New posts", title = "New posts", icon = YidIcons.Bell,
+            state = if (notify) "On" else "Off",
+            summary = "A notification when followed accounts post. Checks run with the app closed, so Android's " +
+                "notification permission and battery exemption are asked when it is turned on. Changeable in Settings.",
+            done = notify, required = false,
+            onClick = { chooseNotify(!notify) }
+        )
+    )
+}
 
-        HorizontalPager(
-            state = pager,
-            modifier = Modifier.weight(1f).fillMaxWidth()
-        ) { index ->
-            val page = PAGES[index]
-            PageContent(page) {
-                when {
-                    page.showMediaChoice -> MediaChoice(chosen = chosen, onChoose = choose)
-                    page.showUpdateChoice -> Choices(
-                        listOf(UpdateMode.OFF to "Off", UpdateMode.NOTIFY to "Notify me", UpdateMode.INSTALL to "Install"),
-                        updates,
-                        chooseUpdates
-                    )
-                    page.showNotifyChoice -> Choices(listOf(false to "Off", true to "Notify me"), notify, chooseNotify)
-                }
-            }
-        }
+/**
+ * The guide shown on first launch, and again from Settings: the logo, the title, how many steps are left, the tiles,
+ * then Start (Done when reopened), which waits for the required ones. [onFinish] receives true when the reader asks
+ * to go to Accounts. Ported from SetupScreen#SetupScreen of
+ * https://github.com/florisboard/florisboard/blob/main/app/src/main/kotlin/dev/patrickgold/florisboard/app/setup/SetupScreen.kt
+ * through Language's
+ * https://github.com/213YaZ786/Language/blob/main/app/src/main/java/com/yaz/language/feature/welcome/WelcomeScreen.kt#WelcomeScreen
+ * and Yiḍ's former
+ * https://github.com/213YaZ786/Yid/blob/main/app/src/main/java/com/yid/app/feature/welcome/WelcomeScreen.kt#WelcomeScreen
+ */
+@Composable
+fun WelcomeScreen(onFinish: (openAccounts: Boolean) -> Unit) {
+    val settings: SettingsStore = koinInject()
+    val reopened = remember { settings.current.welcomeSeen }
+    val steps = rememberSetupTiles(onFinish)
+    // The tile whose long press is open (its id), "" when none.
+    var explained by rememberSaveable { mutableStateOf("") }
 
-        Dots(count = PAGES.size, current = pager.currentPage)
+    WelcomeContent(steps, reopened, { onFinish(false) }) { explained = it.id }
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (pager.currentPage > 0) {
-                QuietButton(onClick = { scope.launch { pager.animateScrollToPage(pager.currentPage - 1) } }) {
-                    Text("Back")
-                }
-            }
-            Spacer(Modifier.weight(1f))
-            BoldButton(
-                filled = true,
-                // The media page has no way forward until the choice is made.
-                // Skip, top right, still leaves at any time.
-                enabled = !PAGES[pager.currentPage].showMediaChoice || chosen != null,
-                onClick = {
-                    // Install is chosen from the start, and Android lets an app
-                    // install only once allowed: moving on from that page asks.
-                    if (PAGES[pager.currentPage].showUpdateChoice && updates == UpdateMode.INSTALL && !Updates.canInstall(context)) {
-                        Updates.allowInstalls(context)
-                    }
-                    if (last) onFinish(true) else scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
-                }
-            ) { Text(if (last) "Go to Accounts" else "Next") }
-        }
+    steps.firstOrNull { it.id == explained }?.let { tile ->
+        SetupTileDialog(tile, onDismiss = { explained = "" })
     }
 }
 
+/**
+ * What the guide draws from the tiles it is given: the layout of SetupScreen (header, steps, footer with the one
+ * button), split from [WelcomeScreen] as Language's. Ported from
+ * https://github.com/213YaZ786/Language/blob/main/app/src/main/java/com/yaz/language/feature/welcome/WelcomeScreen.kt#WelcomeContent
+ * and
+ * https://github.com/florisboard/florisboard/blob/main/app/src/main/kotlin/dev/patrickgold/florisboard/app/setup/SetupScreen.kt#SetupScreen
+ */
 @Composable
-private fun PageContent(page: WelcomePage, choice: @Composable () -> Unit) {
+internal fun WelcomeContent(tiles: List<SetupTile>, reopened: Boolean, onStart: () -> Unit, onExplain: (SetupTile) -> Unit = {}) {
+    val steps = tiles
+    // Drawn over the whole window, so it keeps clear of the system bars itself.
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
     ) {
-        if (page.showMark) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(horizontal = 8.dp)
+        ) {
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            Spacer(Modifier.height(40.dp))
+            // The old guide's mark, turning at its size (https://github.com/213YaZ786/Yid/blob/main/app/src/main/java/com/yid/app/feature/welcome/WelcomeScreen.kt#PageContent).
             LoadingMark(size = 160.dp)
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .accentDisc(),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    page.icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(40.dp)
+            Spacer(Modifier.height(20.dp))
+            // Every title in the accent (the user, 2026-10-31), as Modules' SettingsSectionTitle.
+            Text("Welcome to Yiḍ", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(8.dp))
+            Text(steps.leftText(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(24.dp))
+            SetupTileGrid(steps, onExplain)
+
+            Spacer(Modifier.height(32.dp))
+            val ready = steps.requiredDone()
+            BoldButton(filled = true, enabled = ready, onClick = onStart) { Text(if (reopened) "Done" else "Start") }
+            if (!ready) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Still needed: " + steps.requiredLeft().joinToString(", ") { it.name },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
+            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
-        Text(
-            page.title,
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.semantics { heading() }
-        )
-        Text(
-            page.intro,
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center
-        )
-        if (page.showLinkExample) LinkExample()
-        choice()
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            page.points.forEach { Point(it) }
-        }
-    }
-}
-
-/** Three rows, one of which has to be tapped before the guide can be left. */
-@Composable
-private fun MediaChoice(chosen: AutoDownload?, onChoose: (AutoDownload) -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Option("Never", AutoDownload.OFF, chosen, onChoose)
-        Option("On Wi-Fi only", AutoDownload.UNMETERED, chosen, onChoose)
-        Option("On Wi-Fi or mobile data", AutoDownload.ANY, chosen, onChoose)
-    }
-}
-
-/** Rows to pick one from. */
-@Composable
-private fun <T> Choices(options: List<Pair<T, String>>, chosen: T?, onChoose: (T) -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        options.forEach { (value, label) -> Option(label, value, chosen, onChoose) }
-    }
-}
-
-/** A filled primary colour when picked, so the answer is unmistakable. */
-@Composable
-private fun <T> Option(label: String, value: T, chosen: T?, onChoose: (T) -> Unit) {
-    val picked = chosen == value
-    val haptics = rememberHaptics()
-    ZoneSurface(
-        onClick = {
-            haptics.tick()
-            onChoose(value)
-        },
-        shape = RoundedCornerShape(16.dp),
-        color = if (picked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-        accent = picked,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        // The text takes the zone's own colour, which knows whether it is picked.
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp)
-        )
-    }
-}
-
-@Composable
-private fun LinkExample() {
-    val handleStyle = SpanStyle(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-    ZoneSurface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh
-    ) {
-        Text(
-            buildAnnotatedString {
-                append("bsky.app/profile/")
-                withStyle(handleStyle) { append("nytimes.com") }
-            },
-            style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace),
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
-        )
-    }
-}
-
-@Composable
-private fun Point(text: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(
-            Modifier
-                .padding(top = 8.dp)
-                .size(6.dp)
-                .background(MaterialTheme.colorScheme.primary, CircleShape)
-        )
-        Text(
-            text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun Dots(count: Int, current: Int) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        repeat(count) { index ->
-            Box(
-                Modifier
-                    .size(if (index == current) 10.dp else 8.dp)
-                    .background(
-                        if (index == current) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outlineVariant
-                        },
-                        CircleShape
-                    )
-            )
-        }
-    }
-}
-
-/** The page's icon on a disc of the accent: a drop of glass in the accent when glass is on. */
-@Composable
-private fun Modifier.accentDisc(): Modifier {
-    val glass = LocalGlass.current
-    return if (glass == null) {
-        background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-    } else {
-        glassZone(CircleShape, glass, lens = 1f).background(glass.accentTint, CircleShape)
     }
 }

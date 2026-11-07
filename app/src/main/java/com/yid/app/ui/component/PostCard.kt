@@ -18,9 +18,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ShapeDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,70 +69,80 @@ fun PostCard(
     // it, the same rounded zone the settings sections use. The hairline that
     // used to separate two posts is gone with it: two zones with a gap read as
     // two things without needing a line drawn between them.
-    val shape = RoundedCornerShape(24.dp)
+    val shape = ShapeDefaults.ExtraLarge
     val tap = rememberHaptics()
-    // A tap opens the post, a long press the pill of actions, see PostActions.
+    // A tap opens the post, a long press the suite's long press menu, see PostActions.
     val actions = rememberPostActions(post, onDownload)
-    Box(modifier.then(actions.tracker)) {
+    // The zone is drawn twice, as SMS's ThreadScreen.kt draws its bubble (https://github.com/213YaZ786/SMS/blob/main/app/src/main/java/com/yaz/sms/feature/thread/ThreadScreen.kt#Bubble):
+    // in place, and again as the held copy without click handlers. [outer] places it, [clicks] is what the column answers to.
+    // The copy flies no avatar to the opened post (one shared key, one element) and plays no film of its own.
+    val zone: @Composable (Modifier, Modifier, Boolean) -> Unit = { outer, clicks, copy ->
     ZoneSurface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = if (compact) 3.dp else 5.dp),
+        modifier = outer,
         shape = shape
     ) {
         Column(
-            Modifier.combinedClickable(onClick = { tap.tick(); onClick() }, onLongClick = actions::open)
-                .padding(horizontal = 16.dp, vertical = if (compact) 10.dp else 14.dp),
+            clicks.padding(horizontal = 16.dp, vertical = if (compact) 10.dp else 14.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp)
         ) {
             post.contextLine()?.let { ContextLine(it, icon = if (post.isPinned) YidIcons.Pin else null) }
 
+            // Header as PostDetailScreen.kt's PostBody (https://github.com/213YaZ786/Yid/blob/main/app/src/main/java/com/yid/app/feature/post/PostDetailScreen.kt#PostBody):
+            // the avatar, then the name with @handle under it. The time joins the handle line, and the dot the name.
+            // not ported: PostBody's profile-tap Surface (the card's own tap opens the post).
             Row(
                 horizontalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 12.dp),
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Avatar(
                     post.avatarUrl,
                     post.authorName,
                     size = if (compact) 36.dp else 44.dp,
-                    sharedKey = post.id
+                    sharedKey = if (copy) null else post.id
                 )
 
-                Column(
-                    Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 6.dp)
-                ) {
-                    NameRow(post)
-
-                    if (post.text.isNotBlank()) {
-                        Text(post.text, style = MaterialTheme.typography.bodyLarge)
-                    }
-
-                    if (post.media.isNotEmpty()) {
-                        MediaBlock(post = post, onDownload = onDownload, onOpen = onOpenMedia)
-                    }
-
-                    post.card?.let { card ->
-                        LinkCardBlock(card = card, onClick = { card.url?.let(onOpenLink) })
-                    }
-
-                    post.quoted?.let { quote ->
-                        QuoteBlock(
-                            handle = quote.handle,
-                            name = quote.name,
-                            text = quote.text,
-                            onClick = { onOpenLink(quote.permalink) }
-                        )
-                    }
-
-                    if (showStats) post.stats?.let { StatsRow(it) }
-                }
+                NameRow(post, unread, Modifier.weight(1f))
             }
+
+            // The content takes the whole width of the card, under the header.
+            if (post.text.isNotBlank()) {
+                Text(post.text, style = MaterialTheme.typography.bodyLarge)
+            }
+
+            if (post.media.isNotEmpty()) {
+                MediaBlock(post = post, onDownload = onDownload, onOpen = onOpenMedia)
+            }
+
+            post.card?.let { card ->
+                LinkCardBlock(card = card, onClick = { card.url?.let(onOpenLink) })
+            }
+
+            post.quoted?.let { quote ->
+                QuoteBlock(
+                    handle = quote.handle,
+                    name = quote.name,
+                    text = quote.text,
+                    onClick = { onOpenLink(quote.permalink) }
+                )
+            }
+
+            if (showStats) post.stats?.let { StatsRow(it) }
         }
     }
-    // Arrived since the last visit and not yet scrolled past, see NewDot.
-    NewDot(unread, Modifier.align(Alignment.TopEnd).padding(top = if (compact) 11.dp else 13.dp, end = 26.dp))
-    PostActionsOverlay(actions)
+    }
+    Box(modifier) {
+        // The tracker sits on the zone itself, after the padding, so its bounds are the zone HoldMenu lifts.
+        zone(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = if (compact) 3.dp else 5.dp)
+                .then(actions.tracker),
+            Modifier.combinedClickable(onClick = { tap.tick(); onClick() }, onLongClick = actions::open),
+            false
+        )
+        PostActionsOverlay(actions) {
+            CompositionLocalProvider(LocalInlinePlaying provides null) { zone(Modifier.fillMaxWidth(), Modifier, true) }
+        }
     }
 }
 
@@ -169,30 +181,33 @@ internal fun Avatar(
 }
 
 @Composable
-private fun NameRow(post: Post) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun NameRow(post: Post, unread: Boolean, modifier: Modifier = Modifier) {
+    // From PostDetailScreen.kt's PostBody header (https://github.com/213YaZ786/Yid/blob/main/app/src/main/java/com/yid/app/feature/post/PostDetailScreen.kt#PostBody)
+    // and this file's former NameRow: the name on the first line, @handle and time under it.
+    Column(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Bluesky's PostMeta.tsx: author.displayName || author.handle.
+            Text(
+                post.authorName.ifBlank { "@${post.authorHandle}" },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            // Arrived since the last visit and not yet scrolled past. The dot sits on
+            // the line it marks, centred on it, as Fossify Messages' item_conversation.xml (https://github.com/FossifyOrg/Messages/blob/main/app/src/main/res/layout/item_conversation.xml).
+            NewDot(unread, Modifier.padding(start = 8.dp))
+        }
+        // Handle and time joined with a comma, as AOSP Dialer's CallLogEntryText.java (https://android.googlesource.com/platform/packages/apps/Dialer/+/refs/heads/main/java/com/android/dialer/calllogutils/CallLogEntryText.java).
+        // Without a name the first line already shows the handle, so only the time stays.
+        val time = relativeTime(post.publishedAtMillis)
         Text(
-            post.authorName,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false)
-        )
-        Text(
-            " @${post.authorHandle}",
+            if (post.authorName.isBlank()) time else "@${post.authorHandle}, $time",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false)
-        )
-        // Name and time joined with a comma, as AOSP Dialer's CallLogEntryText.java (https://android.googlesource.com/platform/packages/apps/Dialer/+/refs/heads/main/java/com/android/dialer/calllogutils/CallLogEntryText.java).
-        Text(
-            ", ${relativeTime(post.publishedAtMillis)}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

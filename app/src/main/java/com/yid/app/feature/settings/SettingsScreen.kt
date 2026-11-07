@@ -3,6 +3,8 @@ package com.yid.app.feature.settings
 import com.yid.app.core.update.UpdateMode
 import com.yid.app.core.update.Updates
 import androidx.compose.runtime.saveable.rememberSaveable
+import com.yid.app.feature.welcome.rememberSetupTiles
+import com.yid.app.ui.component.leftText
 import com.yid.app.ui.component.QuietButton
 import com.yid.app.ui.component.ZoneAlertDialog
 import com.yid.app.ui.component.ZoneSurface
@@ -116,6 +118,9 @@ fun SettingsScreen(
     val offlineCount by viewModel.offlineCount.collectAsState()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    // The guide's row says how many steps are left, read as the guide reads them (LinkedOut's SettingsScreen.kt,
+    // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/settings/SettingsScreen.kt#SettingsScreen).
+    val setup = rememberSetupTiles {}
 
     // Changed in system settings, so read again each time the screen returns.
     var xLinksOn by remember { mutableStateOf(xLinksEnabled(context)) }
@@ -386,15 +391,15 @@ fun SettingsScreen(
             )
         }
 
-        Section("Help") {
+        Section("About") {
+            // Dialer's About "Guide" tile (YAZ/Dialer feature/settings/SettingsScreen.kt, id "guide"):
+            // the same first row in every app. The guide opens over Settings and shows the current choices,
+            // so welcomeSeen is kept instead of reset as Dialer does.
             SettingRow(
-                title = "Review the tutorial",
-                summary = "Where to find a handle, and the ways to follow an account.",
+                title = "Guide",
+                summary = setup.leftText(),
                 onClick = onOpenWelcome
             )
-        }
-
-        Section("About") {
             SettingRow(
                 title = "Updates",
                 summary = updatesLabel(settings.updates),
