@@ -35,7 +35,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.layout.WindowInsets
+import com.yid.app.feature.BarAction
+import com.yid.app.ui.component.BarTitle
+import com.yid.app.ui.component.navigationBarBottom
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -106,28 +112,19 @@ fun PostDetailScreen(
         // The page's ground is painted under the whole app, see MainActivity.
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onBackground,
-        topBar = {
-            FloatingTopBar(
-                title = { Text("Post") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(YidIcons.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    if (post != null) {
-                        IconButton(onClick = { share(context, viewModel.shareLink(post)) }) {
-                            Icon(YidIcons.Share, contentDescription = "Share")
-                        }
-                    }
-                }
-            )
-        }
+        // The page below owns the status and navigation bars once, in its own padding: the folding bar of
+        // ConversationView sits in its own Scaffold, which takes none either.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
-        Box(Modifier.fillMaxSize()) {
-            when {
-                post != null -> ConversationView(
-                    contentPadding = padding,
+        // Ported from LinkedOut's PostDetailScreen: the post's own page folds its bar, the waiting and missing page keeps a bar that
+        // stays put, a way back while the post loads and when it is gone.
+        // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/post/PostDetailScreen.kt#PostDetailScreen
+        // not ported: Crossfade of the states and of the missing page (point 18, the animations)
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            if (post != null) {
+                ConversationView(
+                    onBack = onBack,
+                    onShare = { share(context, viewModel.shareLink(post)) },
                     post = post,
                     thread = state.thread,
                     onOpenProfile = onOpenProfile,
@@ -135,33 +132,72 @@ fun PostDetailScreen(
                     onRetry = viewModel::retryThread,
                     shareLink = viewModel.shareLink(post)
                 )
-                state.missing -> {
-                    val error = (state.thread as? ThreadState.Failed)?.error
-                        Text(
-                            // The server's own reason when it gave one, a deletion or
-                            // a suspension, rather than a guess.
-                            (error as? AppError.PostUnavailable)
-                                ?.present()?.let { "${it.headline}. ${it.explanation}" }
-                                ?: "This post can't be shown. It may have been deleted, and it is not saved on this phone.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.align(Alignment.Center).padding(32.dp)
-                        )
+            } else {
+                Column(
+                    Modifier.fillMaxSize().padding(
+                        start = LocalReadableInset.current,
+                        end = LocalReadableInset.current,
+                        bottom = navigationBarBottom()
+                    )
+                ) {
+                    PostBar(onBack = onBack, onShare = null)
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        if (state.missing) {
+                            val error = (state.thread as? ThreadState.Failed)?.error
+                            Text(
+                                // The server's own reason when it gave one, a deletion or
+                                // a suspension, rather than a guess.
+                                (error as? AppError.PostUnavailable)
+                                    ?.present()?.let { "${it.headline}. ${it.explanation}" }
+                                    ?: "This post can't be shown. It may have been deleted, and it is not saved on this phone.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.align(Alignment.Center).padding(32.dp)
+                            )
+                        } else {
+                            LoadingMark(Modifier.align(Alignment.Center), size = 96.dp)
+                        }
+                    }
                 }
-                else -> LoadingMark(Modifier.align(Alignment.Center), size = 96.dp)
             }
         }
     }
 }
 
 /**
+ * The page's top: the floating bar with "Post", a Back and Share once the post is known.
+ * Ported from LinkedOut's PostBar
+ * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/post/PostDetailScreen.kt#PostBar
+ * not ported: the AnimatedVisibility of Share and its kept last click (point 18, the animations: Share shows when the post is known)
+ * not ported: PostDetailScreen (above, its own port)
+ * not ported: ReplyCard (Yiḍ's own, kept as it is, inside ConversationView)
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PostBar(onBack: () -> Unit, onShare: (() -> Unit)?, scrollBehavior: TopAppBarScrollBehavior? = null) {
+    FloatingTopBar(
+        scrollBehavior = scrollBehavior,
+        title = { BarTitle("Post") },
+        navigationIcon = { BarAction(YidIcons.ArrowBack, "Back", onBack) },
+        actions = {
+            if (onShare != null) BarAction(YidIcons.Share, "Share", onShare)
+        }
+    )
+}
+
+/**
  * The post in the middle of its conversation: what it answers above, then
  * the post itself in full, the author's own thread, and the replies.
+ * Ported from LinkedOut's ConversationView
+ * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/post/PostDetailScreen.kt#ConversationView
+ * not ported: the animateItem of its rows (point 18, the animations)
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ConversationView(
-    contentPadding: PaddingValues,
+    onBack: () -> Unit,
+    onShare: () -> Unit,
     post: Post,
     thread: ThreadState,
     onOpenProfile: (String) -> Unit,
@@ -200,14 +236,26 @@ private fun ConversationView(
         )
     }
 
+    // The bar folds away going down and returns going up, the list full screen
+    // (https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/post/PostDetailScreen.kt#ConversationView).
+    // The status and navigation bars are the list's own, the Scaffold takes none (the bar clears the status bar itself).
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = { PostBar(onBack = onBack, onShare = onShare, scrollBehavior = scrollBehavior) }
+    ) { padding ->
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         // Horizontal padding rather than a narrower list, so a drag in the
         // margins of a wide window scrolls too.
         contentPadding = PaddingValues(
             start = LocalReadableInset.current,
-            end = LocalReadableInset.current
-        ).plus(contentPadding)
+            end = LocalReadableInset.current,
+            bottom = navigationBarBottom()
+        ).plus(padding)
     ) {
         val ancestors = conversation?.ancestors.orEmpty()
         if (ancestors.isNotEmpty()) {
@@ -303,6 +351,7 @@ private fun ConversationView(
                 }
             }
         }
+    }
     }
 }
 

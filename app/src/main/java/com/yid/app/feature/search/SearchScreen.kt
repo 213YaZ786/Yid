@@ -1,9 +1,19 @@
 package com.yid.app.feature.search
 
 import com.yid.app.ui.component.GlassSearchField
-import com.yid.app.ui.glass.LocalGlass
-import com.yid.app.ui.glass.groundHere
+import com.yid.app.feature.BarAction
+import com.yid.app.ui.component.BarTitle
+import com.yid.app.ui.component.FloatingTopBar
+import com.yid.app.ui.component.navigationBarBottom
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.runtime.derivedStateOf
 import com.yid.app.ui.component.plus
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -75,40 +85,25 @@ fun SearchScreen(
         )
     }
 
+    // Ported from LinkedOut's SearchScreen: the bar folds away going down and returns going up, the list full screen.
+    // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/search/SearchScreen.kt#SearchScreen
+    // The title shows once the field, the list's first row, has scrolled away (the validated picture, as Yiḍ's FeedScreen headerGone).
+    // not ported: AnimatedVisibility of the Clear icon, Crossfade of the status line, animateItem of that line (point 18, the animations)
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val listState = rememberLazyListState()
+    val headerGone by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         // The page's ground is painted under the whole app, see MainActivity.
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onBackground,
+        // The status and navigation bars are the list's own, in its content padding.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                // The page's ground where the bar sits, ambient light included.
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent),
-                modifier = Modifier.groundHere(LocalGlass.current, MaterialTheme.colorScheme.background),
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(YidIcons.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                title = {
-                    GlassSearchField(
-                        value = typed,
-                        onValueChange = viewModel::setQuery,
-                        placeholder = "Search saved posts",
-                        trailingIcon = {
-                            if (typed.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.setQuery("") }) {
-                                    Icon(YidIcons.Close, contentDescription = "Clear")
-                                }
-                            }
-                        },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
-                        focusRequester = focusRequester,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(end = 12.dp)
-                    )
-                }
+            FloatingTopBar(
+                scrollBehavior = scrollBehavior,
+                title = { if (headerGone) BarTitle("Search") },
+                navigationIcon = { BarAction(YidIcons.ArrowBack, "Back", onBack) }
             )
         }
     ) { padding ->
@@ -122,14 +117,44 @@ fun SearchScreen(
         }
 
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             // Horizontal padding rather than a narrower list, so a drag in
             // the margins of a wide window scrolls too.
             contentPadding = PaddingValues(
                 start = LocalReadableInset.current,
-                end = LocalReadableInset.current
+                end = LocalReadableInset.current,
+                bottom = navigationBarBottom()
             ).plus(padding)
         ) {
+            // The list's first row, under the bar, as LinkedOut's SearchScreen sets its field.
+            // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/search/SearchScreen.kt#SearchScreen
+            item(key = "field") {
+                GlassSearchField(
+                    value = typed,
+                    onValueChange = viewModel::setQuery,
+                    placeholder = "Search saved posts",
+                    leadingIcon = { Icon(YidIcons.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (typed.isNotEmpty()) {
+                            // A tap target of 48 dp in the field's glass, without a Material icon button.
+                            Icon(
+                                YidIcons.Close,
+                                contentDescription = "Clear",
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable(role = Role.Button) { viewModel.setQuery("") }
+                                    .padding(12.dp)
+                            )
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
+                    focusRequester = focusRequester,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                )
+            }
+
             if (hint != null) {
                 item(key = "hint") {
                     Text(
