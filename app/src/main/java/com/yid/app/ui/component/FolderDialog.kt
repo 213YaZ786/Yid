@@ -11,7 +11,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,7 +41,8 @@ fun FolderDialog(
     extras: List<String> = emptyList()
 ) {
     var creating by remember { mutableStateOf(false) }
-    var name by remember { mutableStateOf("") }
+    val nameState = rememberDialogNameState()
+    val name = nameState.text.toString()
 
     ZoneAlertDialog(
         onDismissRequest = onDismiss,
@@ -61,13 +61,10 @@ fun FolderDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    TextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        singleLine = true,
-                        placeholder = { Text("Folder name") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    // The new folder's name field is the kit's DialogNameField, Done creates (point 14).
+                    // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/ui/component/FolderDialog.kt#FolderDialog
+                    // not ported: LinkedOut's title (it keeps `title`; Yiḍ's says "New folder" while creating, kept)
+                    DialogNameField(nameState, "Folder name", onDone = { if (name.isNotBlank()) onSelect(name.trim()) })
                 } else {
                     everything?.let { Choice(it, selected == null) { onSelect(null) } }
                     folders.forEach { folder -> Choice(folder, selected == folder) { onSelect(folder) } }

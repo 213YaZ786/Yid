@@ -95,6 +95,13 @@ data class Settings(
     val folderButtonX: Float = -1f,
     val folderButtonY: Float = -1f,
     /**
+     * Where the Folders screen's new folder button was left, as a snap fraction of the page's movement bounds
+     * (see ui/component/MovableAction), or null until it is moved (then bottom right). folderButtonX and
+     * folderButtonY above are Home's folder button's, not this one's.
+     * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/data/settings/SettingsStore.kt#foldersButtonSnap
+     */
+    val foldersButtonSnap: Float? = null,
+    /**
      * How old an account's last read may be at launch before it is read again (reader kit LaunchRefresh), saved by
      * name. An unknown name in the file falls back to the default with the rest of the settings (see load).
      * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/data/settings/SettingsStore.kt#launchRefresh

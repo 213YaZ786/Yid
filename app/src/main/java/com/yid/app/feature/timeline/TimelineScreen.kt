@@ -2,10 +2,7 @@ package com.yid.app.feature.timeline
 
 import com.yid.app.data.marks.PostMarks
 import androidx.compose.runtime.saveable.rememberSaveable
-import com.yid.app.core.common.AppError
-import com.yid.app.core.common.present
-import com.yid.app.ui.component.ZoneAlertDialog
-import com.yid.app.ui.component.QuietButton
+import com.yid.app.ui.component.FailureDialog
 import androidx.compose.ui.graphics.Color
 import com.yid.app.ui.glass.rememberGlassBackdrop
 import com.yid.app.ui.glass.glassSource
@@ -147,8 +144,18 @@ fun TimelineScreen(
 
     var showFailures by remember { mutableStateOf(false) }
     if (showFailures) {
+        // The kit's FailureDialog (point 12): one centred message in the post card's glass (its default shape,
+        // ShapeDefaults.ExtraLarge, as PostCard's), its title from the Blame most failed accounts share, a count, Close
+        // and Try again, no account listed. Yiḍ has no silent downloads notice (LinkedIn's media progress), so false.
+        // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/timeline/TimelineScreen.kt#TimelineScreen
+        // not ported: silentDownloads, notifier, notificationsAllowed, somethingWrong (LinkedIn's media notice; the alert
+        // is the failed accounts alone)
+        // not ported: ZoneShape (LinkedOut's pane shape; Yiḍ's post card is ShapeDefaults.ExtraLarge, the dialog's default)
         FailureDialog(
-            failed = state.errors.toList(),
+            failed = state.errors.values.toList(),
+            followed = state.followedCount,
+            silentDownloads = false,
+            site = "Bluesky",
             onRetry = {
                 showFailures = false
                 viewModel.refresh()
@@ -171,7 +178,6 @@ fun TimelineScreen(
     // not ported: silentDownloads, notifier, notificationsAllowed, NewPostNotifier (LinkedIn's media notice; Yiḍ's alert is
     // the failed accounts alone)
     // not ported: seen and readPosts (LinkedOut's ReadPosts; Yiḍ's ReadMarks below is its own)
-    // not ported: the kit's FailureDialog and its Blame (point 12, not now: the alert opens the dialog of today)
     // not ported: TimelineFooter's AnimatedContent and animateItem on the footer and on the empty state (point 18, not now)
     // not ported: PullIndicator (LinkedOut's own pull; Yiḍ calls the kit's PullRevealBox, point 3)
     var feedsOpen by remember { mutableStateOf(false) }
@@ -510,47 +516,6 @@ private fun EmptyState(
         modifier = modifier.fillMaxSize()
     )
 }
-
-/**
- * What went wrong, in words, and the one thing that helps: which accounts
- * could not be updated and why. Their saved posts stay in the stream.
- */
-@Composable
-private fun FailureDialog(
-    failed: List<Pair<String, AppError>>,
-    onRetry: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    ZoneAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (failed.size == 1) "1 account could not be updated" else "${failed.size} accounts could not be updated") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                failed.take(FAILURES_SHOWN).forEach { (handle, error) ->
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("@$handle", style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            error.present().explanation,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                if (failed.size > FAILURES_SHOWN) {
-                    Text(
-                        "and ${failed.size - FAILURES_SHOWN} more",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        },
-        confirmButton = { QuietButton(onClick = onRetry) { Text("Try again") } },
-        dismissButton = { QuietButton(onClick = onDismiss) { Text("Close") } }
-    )
-}
-
-private const val FAILURES_SHOWN = 5
 
 private const val LIKED = "Liked"
 private const val ARCHIVED = "Archived"

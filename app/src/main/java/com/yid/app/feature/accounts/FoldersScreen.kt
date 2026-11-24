@@ -4,8 +4,23 @@ import com.yid.app.ui.component.ZoneAlertDialog
 import com.yid.app.ui.component.ZoneSurface
 import androidx.compose.ui.graphics.Color
 import com.yid.app.ui.component.rememberHaptics
-import com.yid.app.ui.component.plus
 import com.yid.app.ui.component.BoldButton
+import com.yid.app.ui.component.BarTitle
+import com.yid.app.ui.component.DialogNameField
+import com.yid.app.ui.component.MovableAction
+import com.yid.app.ui.component.TopActionSize
+import com.yid.app.ui.component.navigationBarBottom
+import com.yid.app.ui.component.rememberDialogNameState
+import com.yid.app.ui.component.statusBarTop
+import com.yid.app.ui.glass.LocalGlass
+import com.yid.app.ui.glass.LocalGlassBackdrop
+import com.yid.app.ui.glass.glassSource
+import com.yid.app.ui.glass.rememberGlassBackdrop
+import com.yid.app.data.settings.SettingsStore
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.Box
+import org.koin.compose.koinInject
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,16 +35,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.layout.heightIn
 import com.yid.app.ui.component.BoldIconButton
 import com.yid.app.ui.component.QuietButton
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,7 +56,6 @@ import androidx.compose.ui.unit.dp
 import com.yid.app.core.model.FollowedAccount
 import com.yid.app.navigation.LocalReadableInset
 import com.yid.app.ui.component.Avatar
-import com.yid.app.ui.component.FloatingTopBar
 import com.yid.app.ui.icon.YidIcons
 import org.koin.androidx.compose.koinViewModel
 
@@ -59,9 +70,12 @@ import org.koin.androidx.compose.koinViewModel
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("UNUSED_PARAMETER")
 fun FoldersScreen(
+    // Kept for the caller: the system back gesture does the going back now, the arrow is gone.
     onBack: () -> Unit,
-    viewModel: AccountsViewModel = koinViewModel()
+    viewModel: AccountsViewModel = koinViewModel(),
+    store: SettingsStore = koinInject()
 ) {
     val rows by viewModel.rows.collectAsState()
     val folders by viewModel.folders.collectAsState()
@@ -131,34 +145,40 @@ fun FoldersScreen(
         )
     }
 
-    Scaffold(
-        // The page's ground is painted under the whole app, see MainActivity.
-        containerColor = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onBackground,
-        topBar = {
-            FloatingTopBar(
-                title = { Text("Folders") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(YidIcons.ArrowBack, contentDescription = "Back") }
-                },
-                actions = {
-                    IconButton(onClick = { creating = true }) {
-                        Icon(YidIcons.Add, contentDescription = "New folder")
-                    }
-                }
-            )
-        }
-    ) { padding ->
+    // No bar and no arrow, the title first in the list, a movable + over the page (requests.md point 13). The system
+    // gesture goes back. The page's ground is painted under the whole app, see MainActivity. The list is recorded as the
+    // glass backdrop, so the + bends it as it floats over.
+    // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/accounts/FoldersScreen.kt#FoldersScreen
+    // not ported: AnimatedContent with fadeThrough on the count, Open and the filed check, animateItem on the zones
+    // (point 18, not now), SimpleAnimatedContentSample's fadeThrough
+    // not ported: LinkedOut's LinkedOutIcons (YidIcons), its Zone and ZoneGap (Yiḍ's FolderZone keeps its ZoneSurface)
+    val settings by store.settings.collectAsState()
+    val statusTop = statusBarTop()
+    val navigationBottom = navigationBarBottom()
+    val look = LocalGlass.current
+    val backdrop = rememberGlassBackdrop()
+    CompositionLocalProvider(LocalGlassBackdrop provides backdrop.takeIf { look != null }) {
+    Box(Modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().then(if (look != null) Modifier.glassSource(backdrop, look) else Modifier),
+            // Room under the last folder for the button: its 48 dp and the 16 dp around it.
             contentPadding = PaddingValues(
                 start = 16.dp + LocalReadableInset.current,
                 end = 16.dp + LocalReadableInset.current,
-                top = 8.dp,
-                bottom = 24.dp
-            ).plus(padding),
+                top = 0.dp,
+                bottom = navigationBottom + 16.dp + TopActionSize + 16.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // The title on the page, no zone, first in the list: it scrolls away with it.
+            item(key = "title") {
+                Box(
+                    Modifier.fillMaxWidth().padding(top = statusTop + 16.dp, bottom = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.primary) { BarTitle("Folders") }
+                }
+            }
             items(folders, key = { it }) { name ->
                 FolderZone(
                     name = name,
@@ -175,6 +195,15 @@ fun FoldersScreen(
                 )
             }
         }
+        // The glass + the finger moves, 16 dp from the window's edges whatever its width; its place is kept in settings.
+        MovableAction(
+            icon = YidIcons.Add,
+            label = "New folder",
+            snapFraction = settings.foldersButtonSnap,
+            onSnapFraction = { fraction -> store.update { it.copy(foldersButtonSnap = fraction) } },
+            onClick = { creating = true }
+        )
+    }
     }
 }
 
@@ -276,6 +305,9 @@ private fun FolderZone(
     }
 }
 
+// New folder and Rename take the kit's DialogNameField (Android Files' New folder field): label that rises, cursor at the
+// start, Rename selects the whole name, Done creates when not blank.
+// https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/accounts/FoldersScreen.kt#NameDialog
 @Composable
 private fun NameDialog(
     title: String,
@@ -284,18 +316,13 @@ private fun NameDialog(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var name by remember { mutableStateOf(initial) }
+    val state = rememberDialogNameState(initial, selectAll = initial.isNotEmpty())
+    val name = state.text.toString()
     ZoneAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            TextField(
-                value = name,
-                onValueChange = { name = it },
-                singleLine = true,
-                placeholder = { Text("Folder name") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            DialogNameField(state, "Folder name", onDone = { if (name.isNotBlank()) onConfirm(name) })
         },
         confirmButton = {
             BoldButton(onClick = { onConfirm(name) }, enabled = name.isNotBlank(), filled = true) { Text(confirm) }
