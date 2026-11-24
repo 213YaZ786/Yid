@@ -64,7 +64,13 @@ enum class MediaType { PHOTO, VIDEO, GIF }
 data class MediaItem(
     val previewUrl: String,
     val downloadUrl: String,
-    val type: MediaType
+    val type: MediaType,
+    /**
+     * The author's description of the picture, read by a screen reader and
+     * shown nowhere. Null when the author wrote none. A default so a cache
+     * written before this field still reads.
+     */
+    val altText: String? = null
 )
 
 @Serializable

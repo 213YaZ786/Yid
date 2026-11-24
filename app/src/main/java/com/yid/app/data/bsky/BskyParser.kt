@@ -180,11 +180,25 @@ internal object BskyParser {
         EMBED_IMAGES -> embed.array("images").mapNotNull { element ->
             val image = element as? JsonObject ?: return@mapNotNull null
             val full = image.text("fullsize") ?: return@mapNotNull null
-            MediaItem(previewUrl = image.text("thumb") ?: full, downloadUrl = full, type = MediaType.PHOTO)
+            // https://raw.githubusercontent.com/bluesky-social/atproto/main/packages/api/lexicons/app/bsky/embed/images.json#alt
+            // `alt` is required in images#view; an empty one says nothing, so it is null here.
+            MediaItem(
+                previewUrl = image.text("thumb") ?: full,
+                downloadUrl = full,
+                type = MediaType.PHOTO,
+                altText = image.text("alt")?.takeIf { it.isNotBlank() }
+            )
         }
         EMBED_VIDEO -> embed.text("playlist")?.let { playlist ->
             val type = if (embed.text("presentation") == "gif") MediaType.GIF else MediaType.VIDEO
-            listOf(MediaItem(previewUrl = embed.text("thumbnail") ?: playlist, downloadUrl = playlist, type = type))
+            listOf(
+                MediaItem(
+                    previewUrl = embed.text("thumbnail") ?: playlist,
+                    downloadUrl = playlist,
+                    type = type,
+                    altText = embed.text("alt")?.takeIf { it.isNotBlank() }
+                )
+            )
         }.orEmpty()
         EMBED_RECORD_WITH_MEDIA -> media(embed.obj("media"))
         else -> emptyList()

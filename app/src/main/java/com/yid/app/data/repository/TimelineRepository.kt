@@ -69,13 +69,7 @@ class TimelineRepository(
 
         val targets = if (only == null) handles else handles.filter { it.lowercase() in only }
 
-        val gate = Semaphore(MAX_PARALLEL_FETCHES)
-
-        val results = targets.map { handle ->
-            async {
-                gate.withPermit { handle to feeds.loadFeed(handle) }
-            }
-        }.map { it.await() }
+        val results = inParallel(targets) { handle -> handle to feeds.loadFeed(handle) }
 
         val errors = mutableMapOf<String, AppError>()
         var oldest: Long? = null
@@ -144,14 +138,11 @@ class TimelineRepository(
             )
         }
 
-        val gate = Semaphore(MAX_PARALLEL_FETCHES)
         val errors = mutableMapOf<String, AppError>()
 
-        blocking.map { feed ->
-            async {
-                gate.withPermit { feed.handle to feeds.loadFeed(feed.handle, feed.nextCursor) }
-            }
-        }.map { it.await() }.forEach { (handle, outcome) ->
+        inParallel(blocking) { feed ->
+            feed.handle to feeds.loadFeed(feed.handle, feed.nextCursor)
+        }.forEach { (handle, outcome) ->
             when (outcome) {
                 is Outcome.Success -> cache.append(outcome.value, isPagedFetch = true)
                 is Outcome.Failure -> errors[handle] = outcome.error
@@ -193,14 +184,28 @@ class TimelineRepository(
             )
             .take(MAX_TIMELINE_POSTS)
 
-    private companion object {
+    internal companion object {
         /**
-         * One at a time. With a single healthy instance in the pool, "parallel"
-         * just means several simultaneous requests to the same small server,
-         * which is precisely what earns a 429. The throttle paces them anyway,
-         * so concurrency here would buy nothing.
+         * Two at a time. Everything is read from one host, and HostThrottle
+         * keeps that host's pace whatever the count here, so two reads in
+         * flight cost one slot of waiting and not a second burst. loadMore
+         * pages with the same count. Declared and used as LinkedOut's, which
+         * keeps its own count at one:
+         * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/data/repository/TimelineRepository.kt#MAX_PARALLEL_FETCHES
          */
-        const val MAX_PARALLEL_FETCHES = 1
+        const val MAX_PARALLEL_FETCHES = 2
         const val MAX_TIMELINE_POSTS = 20_000
+
+        /**
+         * Runs [read] for every item, at most [limit] at a time, and returns the
+         * results in the order of [items]. The semaphore and the async of
+         * refresh and loadMore, in one place so a test can count the reads in
+         * flight.
+         */
+        internal suspend fun <T, R> inParallel(items: List<T>, limit: Int = MAX_PARALLEL_FETCHES, read: suspend (T) -> R): List<R> =
+            coroutineScope {
+                val gate = Semaphore(limit)
+                items.map { item -> async { gate.withPermit { read(item) } } }.map { it.await() }
+            }
     }
 }

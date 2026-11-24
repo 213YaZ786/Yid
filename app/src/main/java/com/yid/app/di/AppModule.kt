@@ -62,7 +62,7 @@ val appModule = module {
     single { AccountStore(androidContext()) }
     single { PostMarks(androidContext()) }
     single { LinkRouter() }
-    single { FeedRepository(get()) }
+    single { FeedRepository(get(), get()) }
     single {
         val settings: SettingsStore = get()
         FeedCache(androidContext(), get()) { settings.current.keepPostsDays }

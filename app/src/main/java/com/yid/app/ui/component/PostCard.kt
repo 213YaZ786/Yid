@@ -296,7 +296,7 @@ internal fun MediaBlock(post: Post, onDownload: (MediaItem) -> Unit, onOpen: (In
                     val source = rememberMediaSource(post.id, index, item)
                     AsyncImage(
                         model = source.preview,
-                        contentDescription = null,
+                        contentDescription = item.altText,
                         contentScale = ContentScale.FillWidth,
                         modifier = Modifier.fillMaxWidth().aspectRatio(ratio)
                     )

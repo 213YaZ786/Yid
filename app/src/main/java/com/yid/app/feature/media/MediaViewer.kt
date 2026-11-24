@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.media3.common.PlaybackException
@@ -74,7 +76,15 @@ fun MediaViewer(
         // train opens without touching the network.
         val source = rememberMediaSource(postId, index, item)
         when (item.type) {
-            MediaType.PHOTO -> ZoomableImage(model = source.playback, onZoomChanged = onZoomChanged)
+            // The kit's ZoomableImage draws its picture with no description, so the alt text rides
+            // on the box around it: a screen reader reads it, nothing is drawn.
+            MediaType.PHOTO -> Box(
+                Modifier.fillMaxSize().then(
+                    item.altText?.let { alt -> Modifier.semantics { contentDescription = alt } } ?: Modifier
+                )
+            ) {
+                ZoomableImage(model = source.playback, onZoomChanged = onZoomChanged)
+            }
             MediaType.VIDEO, MediaType.GIF -> VideoPage(
                 item = item,
                 url = source.playback,

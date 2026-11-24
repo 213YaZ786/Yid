@@ -22,9 +22,16 @@ import java.io.File
  * because the only question ever asked is "has this one gone by", and the
  * list is bounded, so it cannot grow past the cache it describes.
  */
-class ReadMarks(context: Context) {
+class ReadMarks(filesDir: File) {
 
-    private val file = File(context.filesDir, "read-posts.json")
+    /**
+     * The folder is a File so a JVM test can give it a temporary one, as
+     * LinkedOut's ReadPosts does:
+     * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/data/read/ReadPosts.kt#ReadPosts
+     */
+    constructor(context: Context) : this(context.filesDir)
+
+    private val file = File(filesDir, "read-posts.json")
     private val json = Json { ignoreUnknownKeys = true }
 
     private val _read = MutableStateFlow<Set<String>>(emptySet())
@@ -41,7 +48,29 @@ class ReadMarks(context: Context) {
     val readyState: StateFlow<Boolean> = _ready.asStateFlow()
     val ready: Boolean get() = _ready.value
 
-    private val visitFile = File(context.filesDir, "last-visit.txt")
+    private val visitFile = File(filesDir, "last-visit.txt")
+
+    /**
+     * When the reader last opened the app before this launch. Until the
+     * launch has read it, every post counts as old.
+     */
+    @Volatile
+    private var previousVisit: Long = Long.MAX_VALUE
+
+    /**
+     * Posts added after launch, an older page or a profile read again: what
+     * was published before the previous visit is not new, it only filled a gap.
+     *
+     * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/data/read/ReadPosts.kt#markReadIfOld
+     * Takes the pairs of id and time as LinkedOut's does. Its mark, state and
+     * file handling is this class's own markRead and add.
+     */
+    suspend fun markReadIfOld(posts: List<Pair<String, Long>>) {
+        // Until the launch has read the previous visit every time would count as old, and a read
+        // that beat it would mark every new post read: those stay new until scrolled past.
+        if (previousVisit == Long.MAX_VALUE) return
+        add(posts.filter { it.second <= previousVisit }.map { it.first }.toSet())
+    }
 
     suspend fun load() {
         val stored = withContext(Dispatchers.IO) {
@@ -63,6 +92,7 @@ class ReadMarks(context: Context) {
      */
     suspend fun markReadBeforeLastVisit(posts: Map<String, Long>) {
         val previous = withContext(Dispatchers.IO) { runCatching { visitFile.readText().trim().toLong() }.getOrNull() }
+        previousVisit = previous ?: System.currentTimeMillis()
         add(posts.filterValues { previous == null || it <= previous }.keys)
         withContext(Dispatchers.IO) { runCatching { visitFile.writeTextAtomically(System.currentTimeMillis().toString()) } }
     }

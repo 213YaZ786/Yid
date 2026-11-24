@@ -1,17 +1,18 @@
 package com.yid.app.ui.component
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.yid.app.R
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
@@ -56,7 +58,24 @@ fun LoadingMark(
     size: Dp = 32.dp,
     running: Boolean = true,
     progress: Float = 0f
+) = LoadingMark(modifier, size, running) { progress }
+
+/**
+ * The same mark with [progress] read while drawing, so a gesture moving it does not recompose its caller.
+ *
+ * Ported from LinkedOut's LoadingMark, which keeps one Animatable clock (its pen's loop; the star's twinkle here):
+ * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/ui/component/LoadingMark.kt#LoadingMark
+ * not ported: STROKES, SPANS, FRAME, FRAME_CENTRE, PEN, WRITTEN, FADE_FROM, ease, the saveLayer fade and the pen's
+ * Path drawing (LinkedOut's handwritten "out"; Yiḍ keeps its bat and its star, drawn as they were)
+ */
+@Composable
+fun LoadingMark(
+    modifier: Modifier = Modifier,
+    size: Dp = 32.dp,
+    running: Boolean = true,
+    progress: () -> Float
 ) {
+    // The clock below is the source's, the drawing after it is Yiḍ's own, unchanged.
     val bat = ImageBitmap.imageResource(R.drawable.yid_mark_bat)
     val sheen = ImageBitmap.imageResource(R.drawable.yid_mark_sheen)
     val crescent = ImageBitmap.imageResource(R.drawable.yid_mark_crescent)
@@ -69,15 +88,42 @@ fun LoadingMark(
     val colour = colorResource(if (darkPage) android.R.color.system_accent1_300 else android.R.color.system_accent1_700)
     val tint = remember(colour) { ColorFilter.tint(colour, BlendMode.Modulate) }
 
-    val transition = rememberInfiniteTransition(label = "twinkling star")
-    val twinkle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(TWINKLE_MILLIS, easing = LinearEasing), RepeatMode.Restart),
-        label = "twinkle"
-    )
+    // One time source for both ways: the clock continues from where it stands, and a gesture's progress glides from
+    // there, so the star never jumps when `running` changes. Nothing runs at rest. A gesture lights the star along
+    // the first part of its turn, up to its brightest (GLOW_PEAK).
+    // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/ui/component/LoadingMark.kt#LoadingMark
+    // and the Animatable remembered and moved by animateTo in a coroutine:
+    // https://github.com/androidx/androidx/blob/androidx-main/compose/animation/animation-core/samples/src/main/java/androidx/compose/animation/core/samples/AnimatableSamples.kt#AnimatableAnimateToGenericsType
+    // not ported: AnimatableAnimateToGenericsType's tap detection and Offset (the target is the loop's time or the pull, not a touch)
+    val currentProgress by rememberUpdatedState(progress)
+    val clock = remember { Animatable(if (running) 0f else currentProgress().coerceIn(0f, 1f) * GLOW_PEAK) }
+    // Whether the loop has run since the gesture last drove the clock: a stop then finishes the turn first.
+    val ran = remember { BooleanArray(1) }
+    LaunchedEffect(running) {
+        if (running) {
+            ran[0] = true
+            // The infinite frame clock, as InfiniteTransition runs on: a test waiting for idle does not wait for it.
+            var last = withInfiniteAnimationFrameMillis { it }
+            while (true) {
+                val now = withInfiniteAnimationFrameMillis { it }
+                val next = clock.value + (now - last).toFloat() / TWINKLE_MILLIS
+                clock.snapTo(if (next >= 1f) next - 1f else next)
+                last = now
+            }
+        } else {
+            if (ran[0]) {
+                // The star ends its turn at the loop's own pace (it is dark by then), so it does not cut off.
+                clock.animateTo(1f, tween(((1f - clock.value) * TWINKLE_MILLIS).roundToInt(), easing = LinearEasing))
+                clock.snapTo(0f)
+                ran[0] = false
+            }
+            snapshotFlow { currentProgress().coerceIn(0f, 1f) * GLOW_PEAK }.collectLatest { clock.animateTo(it, tween(90, easing = LinearEasing)) }
+        }
+    }
 
+    // The clock is read while drawing, never in composition.
     Canvas(modifier.size(size)) {
+        val twinkle = clock.value
         val side = this.size.minDimension
         val box = IntSize(side.roundToInt(), side.roundToInt())
         drawImage(shadow, dstSize = box, filterQuality = FilterQuality.Medium)
@@ -85,7 +131,7 @@ fun LoadingMark(
         drawImage(bat, dstSize = box, colorFilter = tint, filterQuality = FilterQuality.Medium)
         drawImage(sheen, dstSize = box, filterQuality = FilterQuality.Medium)
         STARS.forEachIndexed { i, (x, y, reach) ->
-            val glow = if (running) glowAt(twinkle, i) else progress.coerceIn(0f, 1f)
+            val glow = glowAt(twinkle, i)
             val centre = Offset((x - FROM) / SPAN * side, (y - FROM) / SPAN * side)
             drawStar(star, centre, reach / SPAN * side, glow)
         }
@@ -143,3 +189,6 @@ private const val STAR_SIDE = 16f
 private val RAY = Color(0xFFFFFAE6)
 
 private const val TWINKLE_MILLIS = 2600
+
+/** The clock's value at which glowAt is brightest: sin(PI * p * 1.6) is 1 at p = 0.5 / 1.6. */
+private const val GLOW_PEAK = 0.5f / 1.6f

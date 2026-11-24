@@ -1,8 +1,12 @@
+// The roborazzi plugin, testOptions and test dependencies are copied from LinkedOut's app/build.gradle.kts
+// https://github.com/213YaZ786/LinkedOut/blob/main/app/build.gradle.kts#testOptions
 plugins {
     // AGP 9 compiles Kotlin itself (built-in Kotlin), so no kotlin-android here.
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    // Screens drawn on the JVM and compared, as SMS's app/build.gradle.kts (roborazzi plugin).
+    alias(libs.plugins.roborazzi)
 }
 
 android {
@@ -71,6 +75,31 @@ android {
         buildConfig = true
     }
 
+    // Screens drawn on the JVM by Robolectric and compared by Roborazzi (its README's setup), copied from LinkedOut's
+    // https://github.com/213YaZ786/LinkedOut/blob/main/app/build.gradle.kts#testOptions
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+            all {
+                it.systemProperties["robolectric.pixelCopyRenderMode"] = "hardware"
+                it.maxHeapSize = "4096m"
+                // Robolectric on JDK 17 and later, as its getting started page says.
+                it.jvmArgs(
+                    "--add-opens=java.base/java.lang=ALL-UNNAMED",
+                    "--add-opens=java.base/java.util=ALL-UNNAMED",
+                    "--add-opens=java.base/java.io=ALL-UNNAMED",
+                    "--add-opens=java.base/java.net=ALL-UNNAMED",
+                    "--add-opens=java.base/java.security=ALL-UNNAMED",
+                    "--add-opens=java.base/java.text=ALL-UNNAMED",
+                    "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+                    "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
+                    "--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED"
+                )
+            }
+        }
+    }
+
     packaging {
         resources.excludes += setOf(
             "/META-INF/{AL2.0,LGPL2.1}",
@@ -95,6 +124,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.graphics.shapes)
+    // The links kit's LinkSheet harmonizes its Caution colour with it.
+    implementation(libs.materialkolor.utilities)
     implementation(libs.androidx.navigation.compose)
 
     implementation(libs.kotlinx.serialization.json)
@@ -116,12 +147,20 @@ dependencies {
 
     // Guava comes in transitively at 33.3.1-android (GHSA-xxph-c9ww-hj94): forced to the fixed release
     // with a dependency constraint (https://docs.gradle.org/current/userguide/dependency_constraints.html).
+    // 33.8.0 also defends HashBiMap and LinkedHashMultimap against hash flooding (GHSA-v5x9-67m3-7m56).
+    // https://github.com/213YaZ786/LinkedOut/blob/main/app/build.gradle.kts#guava
     constraints {
-        implementation("com.google.guava:guava:33.7.2-android") {
-            because("GHSA-xxph-c9ww-hj94")
+        implementation("com.google.guava:guava:33.8.0-android") {
+            because("GHSA-xxph-c9ww-hj94, GHSA-v5x9-67m3-7m56")
         }
     }
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
