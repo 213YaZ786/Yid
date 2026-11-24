@@ -6,8 +6,10 @@ import com.yid.app.core.common.AppError
 import com.yid.app.core.media.AutoMediaDownloader
 import com.yid.app.core.model.Post
 import com.yid.app.data.accounts.AccountStore
+import com.yid.app.data.cache.FeedCache
 import com.yid.app.data.repository.TimelineRepository
 import com.yid.app.data.settings.SettingsStore
+import com.yid.app.ui.component.feedsToSync
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,7 +43,8 @@ class TimelineViewModel(
     private val repository: TimelineRepository,
     private val accounts: AccountStore,
     private val settings: SettingsStore,
-    private val autoDownloader: AutoMediaDownloader
+    private val autoDownloader: AutoMediaDownloader,
+    private val feedCache: FeedCache
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(TimelineUiState())
@@ -85,7 +88,7 @@ class TimelineViewModel(
         viewModelScope.launch {
             // Paint from disk first so the timeline is readable before any
             // request goes out, then refresh over the top.
-            work.withLock {
+            val due = work.withLock {
                 known = followedKeys()
                 filed = filedIn()
                 val cached = repository.cached(folder)
@@ -97,8 +100,23 @@ class TimelineViewModel(
                     folder = folder,
                     folders = accounts.folders.value
                 )
+                // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/timeline/TimelineViewModel.kt#TimelineViewModel
+                // Feeder's feedsToSync with a staleTime: only the accounts whose last read is older than the chosen
+                // age are read, an account never read always. Each read time comes from the account's cached feed.
+                // https://github.com/spacecowboy/Feeder/blob/master/app/src/main/java/com/nononsenseapps/feeder/model/RssLocalSync.kt#feedsToSync
+                // not ported: the feedId and tag branches, syncLoadFeedsIfStale (see ui/component/LaunchRefresh.kt)
+                feedsToSync(
+                    fetchedAt = known.associateWith { feedCache.read(it)?.fetchedAtMillis },
+                    frequency = settings.current.launchRefresh,
+                    now = System.currentTimeMillis()
+                )
             }
-            refresh(everything = true)
+            if (due.isEmpty()) {
+                // Nothing is due: no request goes out, and a folder switch reads nothing, as after a full pass.
+                work.withLock { everythingFetched = true }
+            } else {
+                refresh(everything = true, only = due)
+            }
         }
 
         // Home follows the list live, so an account followed later shows
@@ -122,7 +140,7 @@ class TimelineViewModel(
      * requests. A pull reads the folder on screen, which is what was asked
      * for, at a lower cost to hosts that are already rate limiting.
      */
-    fun refresh(everything: Boolean = false) {
+    fun refresh(everything: Boolean = false, only: Set<String>? = null) {
         if (_state.value.loading || fullRefreshQueued) return
         fullRefreshQueued = true
         viewModelScope.launch {
@@ -130,7 +148,7 @@ class TimelineViewModel(
                 fullRefreshQueued = false
                 known = followedKeys()
                 filed = filedIn()
-                fetch(only = null, everything = everything)
+                fetch(only = only, everything = everything)
             }
         }
     }
@@ -237,7 +255,9 @@ class TimelineViewModel(
         } else {
             repository.refresh(only, if (everything) null else asked)
         }
-        if (everything && only == null) everythingFetched = true
+        // The launch's pass reads only the accounts that are due, the others are fresh enough: it still counts as the
+        // pass over everything, so a folder switch reads nothing.
+        if (everything) everythingFetched = true
         // What goes on screen is the folder shown now. It differs from what
         // was fetched after a pass over everything, and after a switch made
         // while the requests were out.

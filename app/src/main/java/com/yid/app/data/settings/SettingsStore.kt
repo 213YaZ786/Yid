@@ -3,6 +3,8 @@ package com.yid.app.data.settings
 import com.yid.app.core.update.UpdateMode
 import android.content.Context
 import com.yid.app.core.common.writeTextAtomically
+import com.yid.app.ui.component.SyncFrequency
+import com.yid.app.ui.component.defaultSyncFrequency
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -91,7 +93,13 @@ data class Settings(
      * move in, or -1 until it is moved (then it sits above the dock).
      */
     val folderButtonX: Float = -1f,
-    val folderButtonY: Float = -1f
+    val folderButtonY: Float = -1f,
+    /**
+     * How old an account's last read may be at launch before it is read again (reader kit LaunchRefresh), saved by
+     * name. An unknown name in the file falls back to the default with the rest of the settings (see load).
+     * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/data/settings/SettingsStore.kt#launchRefresh
+     */
+    val launchRefresh: SyncFrequency = defaultSyncFrequency
 )
 
 /**

@@ -6,7 +6,11 @@ import com.yid.app.ui.glass.rememberGlassBackdrop
 import com.yid.app.ui.glass.glassSource
 import com.yid.app.ui.glass.LocalGlassBackdrop
 import com.yid.app.ui.glass.LocalGlass
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import com.yid.app.ui.component.StartRevealOverlay
+import com.yid.app.ui.component.StartRevealState
+import com.yid.app.ui.component.startRevealHole
 import com.yid.app.ui.glass.LocalGlass
 import com.yid.app.ui.glass.glassGround
 import com.yid.app.ui.component.rememberHaptics
@@ -374,10 +378,24 @@ private fun MainTabs(
             }
         }
 
-        fun closeWelcome(openAccounts: Boolean) {
+        // The guide stays drawn while the app opens from the Start button outward. Not saved: a turn of the screen ends it.
+        // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/navigation/LinkedOutApp.kt#MainTabs
+        val startReveal = remember { StartRevealState() }
+        var revealing by remember { mutableStateOf(false) }
+        LaunchedEffect(revealing) {
+            if (revealing) startReveal.startRipple { revealing = false }
+        }
+
+        // [origin] is the Start button's centre, null when the guide closes any other way (back).
+        fun closeWelcome(openAccounts: Boolean, origin: Offset? = null) {
             showWelcome = false
             if (!store.current.welcomeSeen) store.update { it.copy(welcomeSeen = true) }
             if (openAccounts) go(TopDestination.ACCOUNTS.ordinal)
+            if (origin != null && origin != Offset.Unspecified) {
+                startReveal.origin = origin
+                startReveal.currentPlayTime = 0f
+                revealing = true
+            }
         }
         // Declared after the tab one, so back closes the guide first.
         PredictiveBackHandler(enabled = showWelcome) { events ->
@@ -481,16 +499,27 @@ private fun MainTabs(
 
         // Above the tabs and the dock. A Surface also stops touches from
         // reaching the screen underneath.
-        if (showWelcome) {
-            // Opaque over the app, with the page's ground and its ambient light.
+        if (showWelcome || revealing) {
+            // Opaque over the app, with the page's ground and its ambient light. While the reveal runs, a hole opens in it.
             Surface(
-                Modifier.fillMaxSize().glassGround(LocalGlass.current, MaterialTheme.colorScheme.background),
+                Modifier
+                    .fillMaxSize()
+                    .then(if (revealing) Modifier.startRevealHole(startReveal) else Modifier)
+                    .glassGround(LocalGlass.current, MaterialTheme.colorScheme.background),
                 color = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.onBackground
             ) {
-                Readable { WelcomeScreen(onFinish = ::closeWelcome) }
+                Readable {
+                    WelcomeScreen(
+                        onFinish = { closeWelcome(it) },
+                        // Start never opens Accounts, as before: the reveal runs from the button.
+                        onStart = { origin -> closeWelcome(openAccounts = false, origin = origin) }
+                    )
+                }
             }
         }
+        // The sparkle ripple over the guide and the app, gone with the reveal.
+        if (revealing) StartRevealOverlay(startReveal)
     }
 }
 

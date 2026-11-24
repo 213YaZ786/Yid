@@ -1,88 +1,126 @@
 package com.yid.app.feature.settings
 
-import com.yid.app.core.update.UpdateMode
-import com.yid.app.core.update.Updates
-import androidx.compose.runtime.saveable.rememberSaveable
-import com.yid.app.feature.welcome.rememberSetupTiles
-import com.yid.app.ui.component.leftText
-import com.yid.app.ui.component.QuietButton
-import com.yid.app.ui.component.ZoneAlertDialog
-import com.yid.app.ui.component.ZoneSurface
-import com.yid.app.ui.component.rememberHaptics
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.windowInsetsTopHeight
-import com.yid.app.core.system.BatteryExemption
-import com.yid.app.navigation.LocalReadableInset
-import com.yid.app.ui.component.ScreenBanner
-import com.yid.app.ui.component.LocalDockPadding
 import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
-import android.provider.Settings
-import androidx.core.content.ContextCompat
-import com.yid.app.sync.NewPostNotifier
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.verify.domain.DomainVerificationManager
 import android.content.pm.verify.domain.DomainVerificationUserState
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.text.format.Formatter
-import androidx.lifecycle.compose.LifecycleResumeEffect
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import com.yid.app.ui.component.GlassRadio
-import androidx.compose.material3.Surface
-import com.yid.app.ui.component.GlassSwitch
 import androidx.compose.material3.Text
-import com.yid.app.ui.component.BoldButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.yid.app.BuildConfig
+import com.yid.app.core.system.BatteryExemption
+import com.yid.app.core.update.StoreLink
+import com.yid.app.core.update.UpdateMode
+import com.yid.app.core.update.Updates
 import com.yid.app.data.settings.AutoDownload
 import com.yid.app.data.settings.StartTab
 import com.yid.app.data.settings.ThemeMode
+import com.yid.app.feature.welcome.rememberSetupTiles
+import com.yid.app.navigation.LocalReadableInset
+import com.yid.app.navigation.WidthClass
+import com.yid.app.sync.NewPostNotifier
+import com.yid.app.ui.component.BoldButton
+import com.yid.app.ui.component.FloatingFrame
+import com.yid.app.ui.component.FloatingTop
+import com.yid.app.ui.component.GlassRadio
+import com.yid.app.ui.component.GlassSlider
+import com.yid.app.ui.component.LocalDockPadding
+import com.yid.app.ui.component.QuietButton
+import com.yid.app.ui.component.SettingsActionTile
+import com.yid.app.ui.component.SettingsFoldedSections
+import com.yid.app.ui.component.SettingsHeaderSpacer
+import com.yid.app.ui.component.SettingsListDetail
+import com.yid.app.ui.component.SettingsSection
+import com.yid.app.ui.component.SettingsSectionTitle
+import com.yid.app.ui.component.SettingsSwitchTile
+import com.yid.app.ui.component.SettingsTile
+import com.yid.app.ui.component.SettingsTileDialogs
+import com.yid.app.ui.component.SettingsTileGrid
+import com.yid.app.ui.component.SideDockClearance
+import com.yid.app.ui.component.SyncFrequency
+import com.yid.app.ui.component.ZoneAlertDialog
+import com.yid.app.ui.component.leftText
+import com.yid.app.ui.component.rememberHaptics
+import com.yid.app.ui.icon.YidIcons
 import com.yid.app.ui.theme.TEXT_SCALES
 import com.yid.app.ui.theme.textScaleLabel
 import org.koin.androidx.compose.koinViewModel
+import kotlin.math.roundToInt
 
-private enum class OpenDialog { NONE, THEME, TEXT_SIZE, KEEP, FREQUENCY, CLEAR, START_TAB, AUTO_DOWNLOAD, UPDATES }
+private enum class OpenDialog { NONE, THEME, TEXT_SIZE, KEEP, FREQUENCY, CLEAR, START_TAB, AUTO_DOWNLOAD, UPDATES, LAUNCH_REFRESH }
 
+/** The groups of settings: one page after another on a phone, a list and the chosen one's page on a wide window. */
+private val APPEARANCE = SettingsSection("appearance", "Appearance", SettingsIcons.Palette)
+private val MEDIA = SettingsSection("media", "Media", SettingsIcons.Image)
+private val READING = SettingsSection("reading", "Reading", YidIcons.Comment)
+private val BACKGROUND = SettingsSection("background", "Background updates", YidIcons.Refresh)
+private val STORAGE = SettingsSection("storage", "Storage", YidIcons.Folder)
+private val ACCOUNTS_FILE = SettingsSection("accounts", "Accounts file", SettingsIcons.Upload)
+private val ABOUT = SettingsSection("about", "About", YidIcons.Info)
+private val TROUBLESHOOTING = SettingsSection("troubleshooting", "Troubleshooting", SettingsIcons.Warning)
+private val SECTIONS = listOf(APPEARANCE, MEDIA, READING, BACKGROUND, STORAGE, ACCOUNTS_FILE, ABOUT, TROUBLESHOOTING)
 
 private fun updatesLabel(mode: UpdateMode): String = when (mode) {
     UpdateMode.OFF -> "Off"
     UpdateMode.NOTIFY -> "Notify me"
     UpdateMode.INSTALL -> "Install"
 }
+
 private fun autoDownloadLabel(value: AutoDownload): String = when (value) {
     AutoDownload.OFF -> "Never"
     AutoDownload.UNMETERED -> "On Wi-Fi only"
@@ -101,9 +139,21 @@ private fun keepLabel(days: Int): String = when (days) {
 }
 
 /**
- * Settings, grouped by what people come here to change. Every description
- * says what the option does for the reader, in plain words.
+ * Settings as tiles, ported from LinkedOut's SettingsScreen (itself from MTGA's, SMS's and Dialer's, which follow
+ * Android's Quick Settings tile):
+ * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/settings/SettingsScreen.kt#SettingsScreen
+ * Sections, switches, actions and the page are laid out as there, Settings being a tab of the dock here too, so the header has no
+ * back button. Yiḍ's own sections and values are kept, each section's tiles in the order of Yiḍ's rows (the validated picture
+ * of requests.md point 4 shows the switches among the choices). The guide tile reads "N left", the "Update by itself" tile is the
+ * logic of the kit's UpdateSourceRow (a ListItem row, which does not fit a grid of tiles) over StoreLink.
+ * not ported: sectionTiles (one list per section keeps Yiḍ's order, a switch and a choice side by side), the connection
+ * check, the browsing data tile and its dialog, the guest cookies and Privacy, the Reads tile and Dns icon (LinkedIn's guest,
+ * its jobs and its one host; Yiḍ has no cookies, no connection check and reads Bluesky's public API), LinkedIn links (the
+ * Bluesky links tile replaces it), Your list (named Accounts file here), Support (Troubleshooting holds the Activity log),
+ * LinkedOut's ChoiceDialog from ui.component (Yiḍ's own radio dialog below stays as it was, only the screen changes),
+ * UpdateSourceRow (the kit's ListItem row, its logic lives in the "self" tile below)
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onOpenDebugLog: () -> Unit,
@@ -117,18 +167,46 @@ fun SettingsScreen(
     val offlineBytes by viewModel.offlineBytes.collectAsState()
     val offlineCount by viewModel.offlineCount.collectAsState()
     val context = LocalContext.current
+    // The top row folds away going down and returns going up, the content full screen, as LinkedOut's SettingsScreen.
+    val topBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val statusTop = WindowInsets.statusBars.getTop(LocalDensity.current)
     val uriHandler = LocalUriHandler.current
-    // The guide's row says how many steps are left, read as the guide reads them (LinkedOut's SettingsScreen.kt,
-    // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/settings/SettingsScreen.kt#SettingsScreen).
-    val setup = rememberSetupTiles {}
+    val haptics = rememberHaptics()
+    // The guide's tile says how many steps are left, read from the system as the guide reads them.
+    val setup = rememberSetupTiles()
 
     // Changed in system settings, so read again each time the screen returns.
-    var xLinksOn by remember { mutableStateOf(xLinksEnabled(context)) }
+    var blueskyLinksOn by remember { mutableStateOf(blueskyLinksEnabled(context)) }
     LifecycleResumeEffect(Unit) {
-        xLinksOn = xLinksEnabled(context)
+        blueskyLinksOn = blueskyLinksEnabled(context)
         onPauseOrDispose { }
     }
-    var dialog by remember { mutableStateOf(OpenDialog.NONE) }
+    // Store can be installed while the app is away, so both are read again when the app comes back.
+    var present by remember { mutableStateOf(StoreLink.present(context)) }
+    var own by remember { mutableStateOf(StoreLink.selfUpdates(context)) }
+    DisposableEffect(Unit) {
+        val lifecycle = ProcessLifecycleOwner.get().lifecycle
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                present = StoreLink.present(context)
+                own = StoreLink.selfUpdates(context)
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    var dialog by rememberSaveable { mutableStateOf(OpenDialog.NONE) }
+    // The tile whose long press is open (its id), "" when none.
+    var tileId by rememberSaveable { mutableStateOf("") }
+    var sectionId by rememberSaveable { mutableStateOf(APPEARANCE.id) }
+    val section = SECTIONS.first { it.id == sectionId }
+    // On a phone every section starts folded; the one open stays open across a turn of the screen.
+    var openId by rememberSaveable { mutableStateOf("") }
+    val openSection = SECTIONS.firstOrNull { it.id == openId }
+    // The page's scroll, held here so a drag on the header drives it (FloatingFrame's `scroll`): the folded
+    // list on a phone, the chosen section's page on a wide window (it starts at the top again for each section).
+    val compactScroll = rememberScrollState()
+    val detailScroll = rememberSaveable(sectionId, saver = ScrollState.Saver) { ScrollState(0) }
 
     LaunchedEffect(Unit) { viewModel.measureStorage() }
 
@@ -205,110 +283,106 @@ fun SettingsScreen(
         }
     }
 
-    // Scrolls at full width, rows pushed in by the readable inset, so the
-    // margins of a tablet scroll like the rest. See ReadableScroll.
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = LocalReadableInset.current)
-    ) {
-        // The screen draws under the status bar, its first row starts below it.
-        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-        ScreenBanner(title = "Settings")
+    val measuring = "Measuring"
+    val storageSize = storageBytes?.let { Formatter.formatShortFileSize(context, it) }
+    val imageCacheSize = imageCacheBytes?.let { Formatter.formatShortFileSize(context, it) }
+    val mediaSize = offlineBytes?.let { bytes ->
+        if (offlineCount == 0) "Nothing saved yet" else "$offlineCount files, ${Formatter.formatShortFileSize(context, bytes)}"
+    }
 
-        Section("Appearance") {
-            SettingRow(
-                title = "Theme",
-                summary = themeLabel(settings.themeMode),
+    // Every tile of a section, in the order of Yiḍ's rows: a switch where it was a switch, a tile that opens a choice,
+    // a page or a link where it was a row. The value is the second line, the summary the long press's explanation.
+    val tiles: Map<SettingsSection, List<SettingsTile>> = mapOf(
+        APPEARANCE to listOf(
+            SettingsActionTile(
+                id = "theme", name = "Theme", title = "Theme", icon = SettingsIcons.Palette,
+                value = themeLabel(settings.themeMode), summary = themeLabel(settings.themeMode),
                 onClick = { dialog = OpenDialog.THEME }
-            )
-            SwitchRow(
-                title = "Pure black",
+            ),
+            SettingsSwitchTile(
+                id = "black", name = "Pure black", title = "Pure black", icon = SettingsIcons.Night,
                 summary = "Deeper blacks in dark mode. Easier on the battery with OLED screens.",
-                checked = settings.pureBlack,
-                enabled = settings.themeMode != ThemeMode.LIGHT,
+                checked = settings.pureBlack, enabled = settings.themeMode != ThemeMode.LIGHT,
                 onChange = viewModel::setPureBlack
-            )
-            SwitchRow(
-                title = "Glass effects",
+            ),
+            SettingsSwitchTile(
+                id = "glass", name = "Glass effects", title = "Glass effects", icon = SettingsIcons.AutoAwesome,
                 summary = "Zones and floating buttons in liquid glass, over a soft light in your wallpaper's colours.",
-                checked = settings.glass,
-                onChange = viewModel::setGlass
-            )
-            SwitchRow(
-                title = "Show counts",
+                checked = settings.glass, onChange = viewModel::setGlass
+            ),
+            SettingsSwitchTile(
+                id = "counts", name = "Counts", title = "Show counts", icon = YidIcons.Heart,
                 summary = "Replies, reposts, quotes and likes under each post.",
-                checked = settings.showCounts,
-                onChange = viewModel::setShowCounts
-            )
-            SettingRow(
-                title = "Text size",
+                checked = settings.showCounts, onChange = viewModel::setShowCounts
+            ),
+            SettingsActionTile(
+                id = "textSize", name = "Text size", title = "Text size", icon = SettingsIcons.FormatSize,
+                value = textScaleLabel(settings.textScale),
                 summary = textScaleLabel(settings.textScale) + ", on top of Android's font size",
                 onClick = { dialog = OpenDialog.TEXT_SIZE }
-            )
-            SwitchRow(
-                title = "Compact posts",
+            ),
+            SettingsSwitchTile(
+                id = "compact", name = "Compact posts", title = "Compact posts", icon = SettingsIcons.GridView,
                 summary = "Tighter spacing, smaller avatars and shorter pictures. More posts on screen.",
-                checked = settings.compactPosts,
-                onChange = viewModel::setCompactPosts
-            )
-            SwitchRow(
-                title = "Square avatars",
+                checked = settings.compactPosts, onChange = viewModel::setCompactPosts
+            ),
+            SettingsSwitchTile(
+                id = "square", name = "Square avatars", title = "Square avatars", icon = YidIcons.Person,
                 summary = "Rounded squares instead of circles.",
-                checked = settings.squareAvatars,
-                onChange = viewModel::setSquareAvatars
+                checked = settings.squareAvatars, onChange = viewModel::setSquareAvatars
             )
-        }
-
-        Section("Media") {
-            SwitchRow(
-                title = "Media on Wi-Fi only",
+        ),
+        MEDIA to listOf(
+            SettingsSwitchTile(
+                id = "mediaWifi", name = "Media on Wi-Fi", title = "Media on Wi-Fi only", icon = SettingsIcons.Wifi,
                 summary = "On mobile data, pictures and videos wait for a tap. Avatars still load.",
-                checked = settings.mediaOnWifiOnly,
-                onChange = viewModel::setMediaOnWifiOnly
-            )
-            SettingRow(
-                title = "Save media automatically",
-                summary = autoDownloadLabel(settings.autoDownloadMedia),
+                checked = settings.mediaOnWifiOnly, onChange = viewModel::setMediaOnWifiOnly
+            ),
+            SettingsActionTile(
+                id = "autoSave", name = "Save media", title = "Save media automatically", icon = YidIcons.Download,
+                value = autoDownloadLabel(settings.autoDownloadMedia), summary = autoDownloadLabel(settings.autoDownloadMedia),
                 onClick = { dialog = OpenDialog.AUTO_DOWNLOAD }
-            )
-            SwitchRow(
-                title = "Play videos automatically",
+            ),
+            SettingsSwitchTile(
+                id = "autoplay", name = "Autoplay", title = "Play videos automatically", icon = YidIcons.Play,
                 summary = "Videos and GIFs play silently in the list as you scroll, and start " +
                     "when opened. Never on mobile data while Wi-Fi only is on.",
-                checked = settings.autoplayVideos,
-                onChange = viewModel::setAutoplayVideos
-            )
-            SwitchRow(
-                title = "Start videos muted",
+                checked = settings.autoplayVideos, onChange = viewModel::setAutoplayVideos
+            ),
+            SettingsSwitchTile(
+                id = "muted", name = "Start muted", title = "Start videos muted", icon = YidIcons.VolumeOff,
                 summary = "Sound stays off until you tap the speaker.",
-                checked = settings.startMuted,
-                onChange = viewModel::setStartMuted
+                checked = settings.startMuted, onChange = viewModel::setStartMuted
             )
-        }
-
-        Section("Reading") {
-            SettingRow(
-                title = "Start on",
-                summary = startTabLabel(settings.startTab),
+        ),
+        READING to listOf(
+            SettingsActionTile(
+                id = "startTab", name = "Start on", title = "Start on", icon = YidIcons.Home,
+                value = startTabLabel(settings.startTab), summary = startTabLabel(settings.startTab),
                 onClick = { dialog = OpenDialog.START_TAB }
-            )
-            SettingRow(
-                title = "Open Bluesky links in Yiḍ",
-                summary = if (xLinksOn) {
+            ),
+            // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/settings/SettingsScreen.kt#SettingsScreen
+            // The state is the stop's label, a tap opens RefreshDialog.
+            SettingsActionTile(
+                id = "refreshLaunch", name = "Refresh at launch", title = "Refresh at launch", icon = SettingsIcons.Timer,
+                value = settings.launchRefresh.tile, summary = settings.launchRefresh.line,
+                onClick = { dialog = OpenDialog.LAUNCH_REFRESH }
+            ),
+            SettingsActionTile(
+                id = "blueskyLinks", name = "Bluesky links", title = "Open Bluesky links in Yiḍ", icon = SettingsIcons.Link,
+                value = if (blueskyLinksOn) "On" else "Off",
+                summary = if (blueskyLinksOn) {
                     "On. bsky.app links open here."
                 } else {
-                    "Off. Turn on \"Open supported links\" and add the bsky.app link. " +
-                        "Sharing a link to Yiḍ works either way."
+                    "Off. Turn on \"Open supported links\" and add the bsky.app " +
+                        "link. Sharing a link to Yiḍ works either way."
                 },
                 onClick = { openLinkSettings(context) }
             )
-        }
-
-        Section("Background updates") {
-            SwitchRow(
-                title = "Check for new posts",
+        ),
+        BACKGROUND to listOf(
+            SettingsSwitchTile(
+                id = "sync", name = "New posts", title = "Check for new posts", icon = YidIcons.Refresh,
                 summary = "Keeps Home up to date and saves new posts, even when the app is closed.",
                 checked = settings.backgroundSync,
                 onChange = { enabled ->
@@ -317,131 +391,206 @@ fun SettingsScreen(
                     // work that runs with the app closed. See BatteryExemption.
                     if (enabled) BatteryExemption.request(context)
                 }
-            )
-            SettingRow(
-                title = "Frequency",
-                summary = intervalLabel(settings.syncIntervalMinutes),
-                enabled = settings.backgroundSync,
-                onClick = { dialog = OpenDialog.FREQUENCY }
-            )
-            SwitchRow(
-                title = "Wi-Fi only",
+            ),
+            SettingsActionTile(
+                id = "frequency", name = "Frequency", title = "Frequency", icon = SettingsIcons.Timer,
+                value = intervalLabel(settings.syncIntervalMinutes),
+                summary = if (settings.backgroundSync) {
+                    "Checks run " + intervalLabel(settings.syncIntervalMinutes).replaceFirstChar { it.lowercase() } + "."
+                } else {
+                    "Needs \"Check for new posts\"."
+                },
+                // Depends on the switch above: a tap then only explains.
+                onClick = if (settings.backgroundSync) ({ dialog = OpenDialog.FREQUENCY }) else ({ tileId = "frequency" })
+            ),
+            SettingsSwitchTile(
+                id = "syncWifi", name = "Wi-Fi only", title = "Wi-Fi only", icon = SettingsIcons.Wifi,
                 summary = "Uses no mobile data for background checks.",
-                checked = settings.syncOnWifiOnly,
-                enabled = settings.backgroundSync,
+                checked = settings.syncOnWifiOnly, enabled = settings.backgroundSync,
                 onChange = viewModel::setWifiOnly
-            )
-            SwitchRow(
-                title = "Notify about new posts",
+            ),
+            SettingsSwitchTile(
+                id = "notify", name = "Notify", title = "Notify about new posts", icon = YidIcons.Bell,
                 summary = when {
                     !settings.backgroundSync -> "Needs \"Check for new posts\"."
                     settings.notifyNewPosts && !notificationsAllowed ->
                         "Blocked in Android settings. Tap to allow."
                     else -> "A notification for each new post Home would show, grouped, one sound per check."
                 },
-                checked = settings.notifyNewPosts && notificationsAllowed,
-                enabled = settings.backgroundSync,
                 // Shown off while Android blocks it, so a tap then means
                 // "make it work" and leads to the permission or Android's page.
+                checked = settings.notifyNewPosts && notificationsAllowed, enabled = settings.backgroundSync,
                 onChange = onNotifyChange
             )
-        }
-
-        Section("Storage") {
-            SettingRow(
-                title = "Keep posts",
-                summary = keepLabel(settings.keepPostsDays) +
-                    ". Saved media follows the same limit.",
+        ),
+        STORAGE to listOf(
+            SettingsActionTile(
+                id = "keep", name = "Keep posts", title = "Keep posts", icon = SettingsIcons.Timer,
+                value = keepLabel(settings.keepPostsDays),
+                summary = keepLabel(settings.keepPostsDays) + ". Saved media follows the same limit.",
                 onClick = { dialog = OpenDialog.KEEP }
-            )
-            SettingRow(
-                title = "Saved posts",
-                summary = storageBytes
-                    ?.let { Formatter.formatShortFileSize(context, it) }
-                    ?.let { "$it. Tap to delete." } ?: "Measuring",
+            ),
+            SettingsActionTile(
+                id = "savedPosts", name = "Saved posts", title = "Saved posts", icon = YidIcons.Delete,
+                value = storageSize ?: measuring, summary = storageSize?.let { "$it. Tap to delete." } ?: measuring,
                 onClick = { dialog = OpenDialog.CLEAR }
-            )
-            SettingRow(
-                title = "Saved media",
-                summary = offlineBytes?.let {
-                    "$offlineCount files, ${Formatter.formatShortFileSize(context, it)}. " +
-                        "Tap to browse and delete."
-                } ?: "Measuring",
+            ),
+            SettingsActionTile(
+                id = "savedMedia", name = "Saved media", title = "Saved media", icon = YidIcons.Download,
+                value = mediaSize ?: measuring, summary = mediaSize?.let { "$it. Tap to browse and delete." } ?: measuring,
                 onClick = onOpenSavedMedia
-            )
-            SettingRow(
-                title = "Cached images",
-                summary = imageCacheBytes
-                    ?.let { Formatter.formatShortFileSize(context, it) }
-                    ?.let { "$it. Tap to delete." } ?: "Measuring",
+            ),
+            SettingsActionTile(
+                id = "cachedImages", name = "Cached images", title = "Cached images", icon = SettingsIcons.Image,
+                value = imageCacheSize ?: measuring, summary = imageCacheSize?.let { "$it. Tap to delete." } ?: measuring,
                 onClick = viewModel::clearImageCache
             )
-        }
-
-        Section("Accounts file") {
-            SettingRow(
-                title = "Export accounts",
-                summary = "Save the accounts you follow, and their folders, to a file.",
+        ),
+        ACCOUNTS_FILE to listOf(
+            SettingsActionTile(
+                id = "export", name = "Export", title = "Export accounts", icon = SettingsIcons.Upload,
+                value = "To a file", summary = "Save the accounts you follow, and their folders, to a file.",
                 onClick = { exporter.launch("yid-accounts.json") }
-            )
-            SettingRow(
-                title = "Import accounts",
-                summary = "From a Yiḍ export, or a text file of handles or bsky.app links.",
+            ),
+            SettingsActionTile(
+                id = "import", name = "Import", title = "Import accounts", icon = YidIcons.Download,
+                value = "From a file", summary = "From a Yiḍ export, or a text file of handles or bsky.app links.",
                 onClick = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
             )
-        }
-
-        Section("About") {
+        ),
+        ABOUT to listOf(
             // Dialer's About "Guide" tile (YAZ/Dialer feature/settings/SettingsScreen.kt, id "guide"):
-            // the same first row in every app. The guide opens over Settings and shows the current choices,
+            // the same first tile in every app. The guide opens over Settings and shows the current choices,
             // so welcomeSeen is kept instead of reset as Dialer does.
-            SettingRow(
-                title = "Guide",
-                summary = setup.leftText(),
+            SettingsActionTile(
+                id = "guide", name = "Guide", title = "Guide", icon = YidIcons.Play,
+                value = setup.leftText(), summary = "See the welcome pages again",
                 onClick = onOpenWelcome
-            )
-            SettingRow(
-                title = "Updates",
-                summary = updatesLabel(settings.updates),
+            ),
+            SettingsActionTile(
+                id = "updates", name = "Updates", title = "Updates", icon = SettingsIcons.Update,
+                value = updatesLabel(settings.updates), summary = updatesLabel(settings.updates),
                 onClick = { dialog = OpenDialog.UPDATES }
-            )
-            SettingRow(
-                title = "Yiḍ ${BuildConfig.VERSION_NAME}",
-                summary = "Read public Bluesky posts with no account, no tracking and no ads.",
-                onClick = null
-            )
-            SettingRow(
-                title = "Source code",
-                summary = "github.com/213YaZ786/Yid",
+            ),
+            // Without Store the app always updates itself: the switch says so and is locked.
+            SettingsSwitchTile(
+                id = "self", name = "Update by itself", title = "Update by itself", icon = SettingsIcons.Update,
+                summary = when {
+                    !present -> "Store is not installed"
+                    !own -> "Store updates this app"
+                    else -> "Turn off to let Store update Yiḍ."
+                },
+                checked = !present || own, enabled = present,
+                onChange = { on ->
+                    haptics.toggle(on)
+                    StoreLink.setSelfUpdates(context, on)
+                    own = on
+                }
+            ),
+            SettingsActionTile(
+                id = "version", name = "Yiḍ", title = "Yiḍ ${BuildConfig.VERSION_NAME}", icon = YidIcons.Info,
+                value = BuildConfig.VERSION_NAME, summary = "Read public Bluesky posts with no account, no tracking and no ads."
+            ),
+            SettingsActionTile(
+                id = "source", name = "Source code", title = "Source code", icon = SettingsIcons.Code,
+                value = "github.com/213YaZ786/Yid", summary = "github.com/213YaZ786/Yid",
                 onClick = { uriHandler.openUri("https://github.com/213YaZ786/Yid") }
+            ),
+            SettingsActionTile(
+                id = "thanks", name = "Thanks", title = "Thanks", icon = YidIcons.Heart,
+                value = "Bluesky", summary = "Made possible by Bluesky's open protocol and its public API."
             )
-            SettingRow(
-                title = "Thanks",
-                summary = "Made possible by Bluesky's open protocol and its public API.",
-                onClick = null
+        ),
+        // For reporting a problem, not for everyday use: its own section, at the very end.
+        TROUBLESHOOTING to listOf(
+            SettingsActionTile(
+                id = "log", name = "Activity log", title = "Activity log", icon = SettingsIcons.Code,
+                value = "Open", summary = "What Yiḍ did lately, to report a problem.",
+                onClick = onOpenDebugLog
             )
-        }
+        )
+    )
 
-        // For reporting a problem, not for everyday use: folded away at the
-        // very end, one tap opens it.
-        var troubleshooting by rememberSaveable { mutableStateOf(false) }
-        // One zone like the sections above, its rows unfolding on a tap.
-        ZoneSurface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 24.dp),
-            shape = RoundedCornerShape(24.dp)
-        ) {
-            Column {
-                SettingRow(title = "Troubleshooting", summary = null, onClick = { troubleshooting = !troubleshooting })
-                if (troubleshooting) {
-                    SettingRow(title = "Activity log", summary = null, onClick = onOpenDebugLog)
+    // One section's page: its name, then its tiles.
+    val page: @Composable ColumnScope.(SettingsSection) -> Unit = { which ->
+        SettingsSectionTitle(which.title)
+        val list: List<SettingsTile> = tiles[which].orEmpty()
+        if (list.isNotEmpty()) SettingsTileGrid(list) { tileId = it.id }
+    }
+
+    // The window decides: a list and a page side by side from Medium up, as a phone held upright
+    // keeps one page. The panes take the whole width, so the readable inset is dropped; the side dock
+    // still needs its room when the readable column no longer clears it (see YidApp's clearsPill).
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wide = WidthClass.of(maxWidth) != WidthClass.COMPACT
+        val inset = LocalReadableInset.current
+        val dockRoom = if (wide && inset >= SideDockClearance) SideDockClearance else 0.dp
+        val dockPadding = LocalDockPadding.current
+        CompositionLocalProvider(LocalReadableInset provides if (wide) 0.dp else inset) {
+            Box(
+                Modifier.fillMaxSize().padding(start = dockRoom)
+                    .nestedScroll(topBarScroll.nestedScrollConnection)
+            ) {
+                FloatingFrame(
+                    bottom = 0.dp,
+                    scroll = if (wide) detailScroll else compactScroll,
+                    // The content runs whole under the window's top while the row folds.
+                    softEdge = false,
+                    // "Settings" small, bold and centred on the top line, no large title: the sections start 16 dp under it.
+                    top = {
+                        Box(
+                            Modifier
+                                // The row and the status bar's height, so it leaves the window whole.
+                                .onSizeChanged { topBarScroll.state.heightOffsetLimit = -(it.height + statusTop).toFloat() }
+                                .offset { IntOffset(0, topBarScroll.state.heightOffset.roundToInt()) }
+                        ) { FloatingTop("Settings") }
+                    }
+                ) { padding ->
+                    if (wide) {
+                        SettingsListDetail(
+                            // SettingsListDetail adds its own 24 dp: 8 dp less in the header gives the 16.
+                            padding = PaddingValues(top = (padding.calculateTopPadding() - 8.dp).coerceAtLeast(0.dp)),
+                            sections = SECTIONS,
+                            section = section,
+                            onSection = { sectionId = it.id },
+                            detailScroll = detailScroll,
+                            detail = { page(section) }
+                        )
+                    } else {
+                        // Scrolls at full width, rows pushed in by the readable inset, so the
+                        // margins of a tablet scroll like the rest. See ReadableScroll.
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(compactScroll)
+                                .padding(horizontal = LocalReadableInset.current)
+                        ) {
+                            SettingsHeaderSpacer(padding)
+                            Spacer(Modifier.height(16.dp))
+                            SettingsFoldedSections(SECTIONS, open = openSection, onOpen = { openId = it?.id.orEmpty() }) { which ->
+                                val list: List<SettingsTile> = tiles[which].orEmpty()
+                                if (list.isNotEmpty()) SettingsTileGrid(list) { tileId = it.id }
+                            }
+                            Spacer(Modifier.height(24.dp))
+                            // The floating dock covers the bottom: the last section stays above it.
+                            Spacer(Modifier.height(dockPadding))
+                        }
+                    }
                 }
             }
         }
+    }
 
-        Spacer(Modifier.height(24.dp + LocalDockPadding.current))
+    tiles.values.flatten().firstOrNull { it.id == tileId }?.let { tile ->
+        SettingsTileDialogs(tile, onDismiss = { tileId = "" })
     }
 
     when (dialog) {
+        OpenDialog.LAUNCH_REFRESH -> RefreshDialog(
+            selected = settings.launchRefresh,
+            onPick = viewModel::setSyncFrequency,
+            onDismiss = { dialog = OpenDialog.NONE }
+        )
         OpenDialog.START_TAB -> ChoiceDialog(
             title = "Start on",
             options = StartTab.entries.map { it to startTabLabel(it) },
@@ -518,79 +667,37 @@ fun SettingsScreen(
     }
 }
 
-/** A titled group of rows on one rounded card, the Obtainium way. */
+/**
+ * The choice dialog of Refresh at launch, as ChoiceDialog draws its frame (ZoneAlertDialog, title, a centred line, one
+ * button): the line says the stop, the glass slider moves over the nine stops and the value is saved as it moves.
+ * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/settings/SettingsScreen.kt#RefreshDialog
+ * not ported: ChoiceDialog's option capsules, Tick, danger and icon (a slider takes their place), its Cancel button
+ * (nothing is pending, Done closes)
+ */
 @Composable
-private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
-    // Centred and at title size: a section heading names what the zone below
-    // holds, which is data about the screen and not one of its rows.
-    Text(
-        title,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-        textAlign = TextAlign.Center,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 28.dp, end = 28.dp, top = 24.dp, bottom = 10.dp)
-    )
-    ZoneSurface(
-        shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-    ) {
-        Column(content = content)
-    }
-}
-
-@Composable
-private fun SettingRow(
-    title: String,
-    summary: String?,
-    onClick: (() -> Unit)?,
-    enabled: Boolean = true,
-    quiet: Boolean = false,
-    trailing: (@Composable () -> Unit)? = null
-) {
-    val haptics = rememberHaptics()
-    val alpha = if (enabled) 1f else 0.38f
-    ListItem(
-        headlineContent = { Text(title, color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)) },
-        supportingContent = summary?.let {
-            { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)) }
-        },
-        trailingContent = trailing,
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        // Every row answers with a tick; a switch row answers with the switch's
-        // own feel instead, so it is quiet here.
-        modifier = if (onClick != null) {
-            Modifier.clickable(enabled = enabled) {
-                if (!quiet) haptics.tick()
-                onClick()
+internal fun RefreshDialog(selected: SyncFrequency, onPick: (SyncFrequency) -> Unit, onDismiss: () -> Unit) {
+    val options = SyncFrequency.entries
+    ZoneAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Refresh at launch") },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    selected.line,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                GlassSlider(
+                    value = selected.ordinal.toFloat(),
+                    onValueChange = { onPick(options[it.toInt().coerceIn(0, options.lastIndex)]) },
+                    valueRange = 0f..options.lastIndex.toFloat(),
+                    steps = options.size - 2,
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+                )
             }
-        } else {
-            Modifier
-        }
-    )
-}
-
-@Composable
-private fun SwitchRow(
-    title: String,
-    summary: String,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit,
-    enabled: Boolean = true
-) {
-    val haptics = rememberHaptics()
-    val change = { on: Boolean ->
-        haptics.toggle(on)
-        onChange(on)
-    }
-    SettingRow(
-        title = title,
-        summary = summary,
-        enabled = enabled,
-        quiet = true,
-        onClick = { change(!checked) },
-        trailing = { GlassSwitch(checked = checked, onCheckedChange = change, enabled = enabled) }
+        },
+        confirmButton = { QuietButton(onClick = onDismiss) { Text("Done") } }
     )
 }
 
@@ -656,28 +763,20 @@ private fun intervalLabel(minutes: Int): String = when {
  * the reader, since only Bluesky could verify the domain, so this reads the
  * reader's choice rather than a verification.
  */
-private fun xLinksEnabled(context: Context): Boolean {
+private fun blueskyLinksEnabled(context: Context): Boolean {
     val manager = context.getSystemService(DomainVerificationManager::class.java) ?: return false
     val state = runCatching { manager.getDomainVerificationUserState(context.packageName) }
         .getOrNull() ?: return false
     if (!state.isLinkHandlingAllowed) return false
-    val xState = state.hostToStateMap["bsky.app"]
-    return xState == DomainVerificationUserState.DOMAIN_STATE_SELECTED ||
-        xState == DomainVerificationUserState.DOMAIN_STATE_VERIFIED
+    val hostState = state.hostToStateMap["bsky.app"]
+    return hostState == DomainVerificationUserState.DOMAIN_STATE_SELECTED ||
+        hostState == DomainVerificationUserState.DOMAIN_STATE_VERIFIED
 }
 
 /** The system screen where supported links are switched on for this app. */
-/** Yiḍ's own notification page in Android settings. */
-private fun openNotificationSettings(context: Context) {
-    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    runCatching { context.startActivity(intent) }
-}
-
 private fun openLinkSettings(context: Context) {
     val intent = Intent(
-        android.provider.Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS,
+        Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS,
         Uri.parse("package:${context.packageName}")
     )
     runCatching { context.startActivity(intent) }
