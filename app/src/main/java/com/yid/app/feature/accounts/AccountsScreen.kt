@@ -8,15 +8,29 @@ import com.yid.app.ui.component.rememberHaptics
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.layout.layout
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import com.yid.app.ui.component.AppBarWithSearch
+import com.yid.app.ui.component.BoldIconButton
+import com.yid.app.ui.component.CapsuleMenuOffset
+import com.yid.app.ui.component.DropdownMenuGroup
+import com.yid.app.ui.component.DropdownMenuItem
+import com.yid.app.ui.component.FolderSwitch
+import com.yid.app.ui.component.GlassMenu
+import com.yid.app.ui.component.SearchCapsuleField
+import com.yid.app.ui.component.SelectableDropdownMenuItem
 import androidx.compose.ui.platform.LocalContext
 import com.yid.app.core.link.PastedText
 import android.widget.Toast
 import android.content.ClipboardManager
 import com.yid.app.core.model.Actor
-import com.yid.app.ui.component.BannerAction
-import com.yid.app.ui.component.ScreenBanner
 import com.yid.app.ui.component.EmptyZone
 import com.yid.app.ui.component.BoldButton
 import com.yid.app.navigation.LocalReadableInset
@@ -97,6 +111,10 @@ fun AccountsScreen(
         )
     }
     var query by rememberSaveable { mutableStateOf("") }
+    // The folder chosen in the capsule's menu, null for All. A folder deleted since is All again.
+    var chosenFolder by rememberSaveable { mutableStateOf<String?>(null) }
+    val folder = chosenFolder?.takeIf { it in folders }
+    var foldersOpen by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     val context = LocalContext.current
     val haptics = rememberHaptics()
@@ -113,10 +131,11 @@ fun AccountsScreen(
     val trimmed = if ('/' in query) candidate.orEmpty() else query.trim().removePrefix("@")
     val alreadyFollowed = candidate != null &&
         rows.any { it.handle.equals(candidate, ignoreCase = true) }
+    val inFolder = if (folder == null) rows else rows.filter { it.folder == folder }
     val visible = if (trimmed.isEmpty()) {
-        rows
+        inFolder
     } else {
-        rows.filter {
+        inFolder.filter {
             it.handle.contains(trimmed, ignoreCase = true) ||
                 it.name?.contains(trimmed, ignoreCase = true) == true
         }
@@ -176,11 +195,49 @@ fun AccountsScreen(
         AccountsViewModel.asHandle(text)?.let { open(it) } ?: focus.clearFocus()
     }
 
+    // The field's keyboard action and its two buttons, shared by the capsule's field and the lone field.
+    // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/accounts/AccountsScreen.kt#AccountsScreen
+    // not ported: AccountsScreen (the screen itself is this file's, only its capsule with the folder switch and menu is
+    // rebuilt here)
+    // not ported: AccountKind, QueryKind, classify, explain, notice (LinkedIn's address kinds and the line under the field;
+    // Bluesky has handles and the search of people, kept below)
+    // not ported: confirmUnfollow and AccountCard's HoldMenu with Unfollow (the held card is another point; the unfollow
+    // stays on the profile)
+    // not ported: animateItem on the rows, the notice and the candidate (point 18, not now)
+    // not ported: paste (LinkedOut's reads LinkedIn addresses; this file's own paste() above reads Bluesky links and stays)
+    // not ported: open (LinkedOut's takes a kind too; Bluesky has one kind of account)
+    val searchActions = KeyboardActions(onSearch = {
+        when {
+            candidate != null && !alreadyFollowed -> open(candidate)
+            visible.size == 1 -> open(visible.first().handle)
+            else -> focus.clearFocus()
+        }
+    })
+    // The Clear icon grows in and out with the field's end, so the field does not jump when the first letter is typed.
+    // https://github.com/androidx/androidx/blob/androidx-main/compose/animation/animation/samples/src/main/java/androidx/compose/animation/samples/AnimatedVisibilitySamples.kt#AnimatedVisibilityWithBooleanVisibleParamNoReceiver
+    // not ported: AnimatedVisibilityWithBooleanVisibleParamNoReceiver's clickable Box toggling `visible`, its Alignment.Center
+    // and its corner radius animated by `transition.animateDp` (the Clear icon is shown by the query, and has no corner)
+    val fieldActions: @Composable () -> Unit = {
+        AnimatedVisibility(
+            visible = query.isNotEmpty(),
+            enter = fadeIn(tween(200)) + expandHorizontally(tween(200)),
+            exit = fadeOut(tween(200)) + shrinkHorizontally(tween(200))
+        ) {
+            BoldIconButton(onClick = { query = "" }) {
+                Icon(YidIcons.Close, contentDescription = "Clear")
+            }
+        }
+        // Always there, and the clipboard is read only on a tap: reading it to decide whether to show the button would be
+        // a read too, and Android raises its notice on every one.
+        BoldIconButton(onClick = { paste() }) {
+            Icon(YidIcons.Paste, contentDescription = "Paste a link or a handle")
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            // The banner and the search field are rows of the list, so the
-            // whole screen scrolls, under the status bar too.
+            // The capsule is the first row of the list, so the whole screen scrolls, under the status bar too.
             contentPadding = PaddingValues(
                 start = 16.dp + LocalReadableInset.current,
                 top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
@@ -189,24 +246,89 @@ fun AccountsScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item(key = "banner") {
-                // The screen's name centred in its zone, the folders one tap away in
-                // the same zone, as on every screen that opens with a banner.
-                Box(Modifier.fullBleed(16.dp)) {
-                    ScreenBanner(
-                        title = "Accounts",
-                        subtitle = if (rows.isEmpty()) null else "${rows.size} followed",
-                        trailing = {
-                            BannerAction(
-                                icon = YidIcons.Folder,
-                                label = "Folders",
-                                onClick = onOpenFolders
+            // The capsule is the first row of the list. Nobody followed: the field alone is the first row, 8 dp under the
+            // status bar as the capsule is. The folder choice is the capsule's navigation icon: a menu under it with the
+            // folders and their counts, then Manage folders last (Gmail's Manage labels), the shown folder checked; the real
+            // search field in its middle.
+            // https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/SearchBar.kt#AppBarWithSearch
+            // not ported: AppBarWithSearch (the app's AppBarWithSearch in ui/component/FeedBanner.kt is its port, used as it is)
+            // not ported: DropdownMenuGroup (the app's ui/component/GlassMenu.kt is its port, used as it is)
+            if (rows.isNotEmpty()) item(key = "header") {
+                Box(Modifier.padding(top = 8.dp)) {
+                    AppBarWithSearch(
+                        inputField = {
+                            SearchCapsuleField(
+                                searchIcon = YidIcons.Search,
+                                value = query,
+                                onValueChange = { query = it },
+                                hints = listOf("Search ${rows.size} accounts or open a handle", "Search ${rows.size} accounts"),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                keyboardActions = searchActions
                             )
+                        },
+                        actions = { fieldActions() },
+                        navigationIcon = {
+                            // The wrapper is the screen's heading for TalkBack, the switch inside stays its own button.
+                            Box(Modifier.semantics { heading(); contentDescription = "Accounts" }) {
+                                Box {
+                                    FolderSwitch(
+                                        icon = YidIcons.Folder,
+                                        trailingIcon = YidIcons.ExpandMore,
+                                        label = folder ?: "All",
+                                        expanded = foldersOpen,
+                                        onClick = { foldersOpen = true }
+                                    )
+                                    GlassMenu(expanded = foldersOpen, onDismissRequest = { foldersOpen = false }, contentOffset = CapsuleMenuOffset) {
+                                        DropdownMenuGroup(index = 0, count = 2) {
+                                            SelectableDropdownMenuItem(
+                                                selected = folder == null,
+                                                onClick = { chosenFolder = null; foldersOpen = false },
+                                                text = "All",
+                                                count = rows.size
+                                            )
+                                            // With Main alone the folder row would repeat All, so folders come with the first
+                                            // one the reader makes, as the filing chip does.
+                                            if (folders.size > 1) {
+                                                folders.forEach { name ->
+                                                    SelectableDropdownMenuItem(
+                                                        selected = folder == name,
+                                                        onClick = { chosenFolder = name; foldersOpen = false },
+                                                        text = name,
+                                                        count = rows.count { it.folder == name }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        DropdownMenuGroup(index = 1, count = 2) {
+                                            DropdownMenuItem(
+                                                text = "Manage folders",
+                                                onClick = { foldersOpen = false; onOpenFolders() },
+                                                leadingIcon = {
+                                                    Icon(YidIcons.Tune, contentDescription = null, modifier = Modifier.size(24.dp))
+                                                },
+                                                trailingIcon = {
+                                                    Icon(
+                                                        YidIcons.ChevronRight,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(20.dp),
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     )
                 }
             }
-            item(key = "search") {
+            // The capsule and the bare field are two items with two keys: one leaves while the other arrives at the same
+            // place, so neither takes animateItem (the two would overlap and the rows below jump twice). Left as it is.
+            if (rows.isEmpty()) item(key = "search") {
+                // Nothing to see, but TalkBack still finds the screen's name (the old banner row's Box): 1 dp here, 7 dp of
+                // padding below, so the field stays 8 dp down.
+                Box(Modifier.size(1.dp).semantics { heading(); contentDescription = "Accounts" })
                 GlassSearchField(
                     value = query,
                     onValueChange = { query = it },
@@ -219,23 +341,14 @@ fun AccountsScreen(
                                     Icon(YidIcons.Close, contentDescription = "Clear")
                                 }
                             }
-                            // Always there, and the clipboard is read only on a tap:
-                            // reading it to decide whether to show the button would be
-                            // a read too, and Android raises its notice on every one.
                             IconButton(onClick = { paste() }) {
                                 Icon(YidIcons.Paste, contentDescription = "Paste a link or a handle")
                             }
                         }
                     },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = {
-                        when {
-                            candidate != null && !alreadyFollowed -> open(candidate)
-                            visible.size == 1 -> open(visible.first().handle)
-                            else -> focus.clearFocus()
-                        }
-                    }),
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    keyboardActions = searchActions,
+                    modifier = Modifier.fillMaxWidth().padding(top = 7.dp)
                 )
             }
             if (candidate != null && !alreadyFollowed) {
@@ -425,16 +538,4 @@ private fun EmptyState(modifier: Modifier = Modifier) {
         icon = YidIcons.Person,
         modifier = modifier
     )
-}
-
-/**
- * Undoes the list's side padding for a row that brings its own, the banner,
- * so it keeps the width it has on every other screen.
- */
-private fun Modifier.fullBleed(side: Dp) = layout { measurable, constraints ->
-    val extra = side.roundToPx()
-    val placeable = measurable.measure(
-        constraints.copy(minWidth = constraints.minWidth + 2 * extra, maxWidth = constraints.maxWidth + 2 * extra)
-    )
-    layout(constraints.maxWidth, placeable.height) { placeable.place(-extra, 0) }
 }

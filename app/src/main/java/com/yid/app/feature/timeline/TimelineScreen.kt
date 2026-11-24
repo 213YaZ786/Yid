@@ -2,7 +2,6 @@ package com.yid.app.feature.timeline
 
 import com.yid.app.data.marks.PostMarks
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.foundation.layout.Spacer
 import com.yid.app.core.common.AppError
 import com.yid.app.core.common.present
 import com.yid.app.ui.component.ZoneAlertDialog
@@ -12,16 +11,30 @@ import com.yid.app.ui.glass.rememberGlassBackdrop
 import com.yid.app.ui.glass.glassSource
 import com.yid.app.ui.glass.LocalGlassBackdrop
 import com.yid.app.ui.glass.LocalGlass
-import com.yid.app.ui.component.ZoneSurface
 import com.yid.app.ui.component.rememberRefreshHaptics
 import com.yid.app.ui.component.LoadingMark
-import com.yid.app.ui.component.PullIndicator
+import com.yid.app.ui.component.PullRevealBox
+import com.yid.app.ui.component.AppBarWithSearch
+import com.yid.app.ui.component.BannerAction
+import com.yid.app.ui.component.CapsuleMenuOffset
+import com.yid.app.ui.component.DropdownMenuGroup
+import com.yid.app.ui.component.FolderSwitch
+import com.yid.app.ui.component.GlassMenu
+import com.yid.app.ui.component.ScrollUpButton
+import com.yid.app.ui.component.SearchCapsuleHint
+import com.yid.app.ui.component.SelectableDropdownMenuItem
+import com.yid.app.data.accounts.AccountStore
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.foundation.border
 import com.yid.app.ui.component.EmptyZone
 import com.yid.app.ui.component.boldBorder
-import com.yid.app.ui.component.BoldIconButton
 import com.yid.app.ui.component.BoldButton
 import com.yid.app.ui.component.LocalDockPadding
 import com.yid.app.ui.component.LocalInlinePlaying
@@ -30,12 +43,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -45,17 +55,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.SmallFloatingActionButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -69,8 +75,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -80,9 +84,7 @@ import com.yid.app.core.media.MediaDownloader
 import com.yid.app.data.settings.SettingsStore
 import com.yid.app.core.model.Post
 import com.yid.app.feature.media.MediaViewer
-import com.yid.app.ui.component.FolderDialog
 import com.yid.app.ui.component.PostCard
-import com.yid.app.ui.component.relativeTime
 import com.yid.app.ui.icon.YidIcons
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -155,34 +157,115 @@ fun TimelineScreen(
         )
     }
 
-    var choosingFolder by remember { mutableStateOf(false) }
-    if (choosingFolder) {
-        FolderDialog(
-            title = "Show on Home",
-            folders = state.folders,
-            selected = state.folder,
-            everything = "Every account",
-            onSelect = { name ->
-                choosingFolder = false
-                // A name typed under New folder creates it, empty, and Home
-                // shows it so the reader sees where the next filing lands.
-                if (name == LIKED || name == ARCHIVED) {
-                    special = name
-                } else {
-                    special = null
-                    viewModel.showFolder(name?.let(viewModel::createFolder))
-                }
-            },
-            onDismiss = { choosingFolder = false },
-            extras = listOf(LIKED, ARCHIVED)
-        )
+    // The feed choice, the capsule's folder switch (requests.md points 10 and 11): the folder icon, the feed's name and a
+    // chevron, which opens a menu under it: All and the folders, then Liked and Archived, the shown one checked
+    // (Material 3 Expressive's grouped menu in glass, GlassMenu). Picking does what a tap on a chip did.
+    // The capsule is an item of the list that records listBackdrop: floating on it, it would draw the recording that holds
+    // it, a layer inside itself, and Android's renderer overflows its stack at the first frame. So AppBarWithSearch draws it
+    // with no backdrop, and the menu lives in a window of its own.
+    // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/timeline/TimelineScreen.kt#TimelineScreen
+    // not ported: FloatingFrame (SMS's frame; here the capsule draws itself with no backdrop)
+    // not ported: onPostScroll (SMS's nested scroll of the frame; Home's list has its own)
+    // not ported: TimelineScreen (the screen itself is this file's, only the feed choice, the capsule, the pull and the way
+    // back to the top are rebuilt here)
+    // not ported: silentDownloads, notifier, notificationsAllowed, NewPostNotifier (LinkedIn's media notice; Yiḍ's alert is
+    // the failed accounts alone)
+    // not ported: seen and readPosts (LinkedOut's ReadPosts; Yiḍ's ReadMarks below is its own)
+    // not ported: the kit's FailureDialog and its Blame (point 12, not now: the alert opens the dialog of today)
+    // not ported: TimelineFooter's AnimatedContent and animateItem on the footer and on the empty state (point 18, not now)
+    // not ported: PullIndicator (LinkedOut's own pull; Yiḍ calls the kit's PullRevealBox, point 3)
+    var feedsOpen by remember { mutableStateOf(false) }
+    val showFeed: (String?) -> Unit = { name ->
+        feedsOpen = false
+        if (name == LIKED || name == ARCHIVED) {
+            special = name
+        } else {
+            special = null
+            viewModel.showFolder(name)
+        }
     }
-    // Offered once the reader has made a folder. With Main alone there is
-    // nothing to choose, and the title stays a title.
-    val chooseFolder: (() -> Unit)? = if (state.folders.size > 1 || special != null || marked.liked.isNotEmpty() || marked.archived.isNotEmpty()) {
-        { choosingFolder = true }
-    } else {
-        null
+    // The menu with its counts: each folder row carries its count of accounts as the badge of NavigationDrawerItem
+    // (GlassMenu's SelectableDropdownMenuItem `count`). With Main alone the folder rows would repeat All, so they come
+    // with the first folder the reader makes.
+    // https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/SearchBar.kt#AppBarWithSearch
+    // not ported: feedPill (a pill with a banner probe; the capsule here serves nobody followed too)
+    // not ported: AppBarWithSearch (the app's AppBarWithSearch in ui/component/FeedBanner.kt is its port, used as it is)
+    val followed by koinInject<AccountStore>().accounts.collectAsState()
+    val feedMenu: @Composable () -> Unit = {
+        GlassMenu(expanded = feedsOpen, onDismissRequest = { feedsOpen = false }, contentOffset = CapsuleMenuOffset) {
+            // No Clear row: a feed is chosen, not cleared.
+            DropdownMenuGroup(index = 0, count = 2) {
+                SelectableDropdownMenuItem(selected = state.folder == null, onClick = { showFeed(null) }, text = "All", count = followed.size)
+                if (state.folders.size > 1) {
+                    state.folders.forEach { name ->
+                        SelectableDropdownMenuItem(
+                            selected = state.folder == name,
+                            onClick = { showFeed(name) },
+                            text = name,
+                            count = followed.count { it.folder == name }
+                        )
+                    }
+                }
+            }
+            DropdownMenuGroup(index = 1, count = 2) {
+                listOf(LIKED, ARCHIVED).forEach { name ->
+                    SelectableDropdownMenuItem(selected = state.folder == name, onClick = { showFeed(name) }, text = name)
+                }
+            }
+        }
+    }
+    // The capsule's navigation icon: the screen keeps its heading for TalkBack, this wrapper is a heading named "Home", and
+    // the switch inside it stays its own node, a button that says the feed and whether its menu is open.
+    val feedSwitch: @Composable () -> Unit = {
+        Box(Modifier.semantics { heading(); contentDescription = "Home" }) {
+            Box {
+                FolderSwitch(
+                    icon = YidIcons.Folder,
+                    trailingIcon = YidIcons.ExpandMore,
+                    label = state.folder ?: "All",
+                    expanded = feedsOpen,
+                    onClick = { feedsOpen = true }
+                )
+                feedMenu()
+            }
+        }
+    }
+    // The alert pops in and out (scale and fade) as the failures come and go, the room it takes opening and closing with it
+    // so the capsule's hint does not jump.
+    // https://github.com/androidx/androidx/blob/androidx-main/compose/animation/animation/samples/src/main/java/androidx/compose/animation/samples/AnimatedVisibilitySamples.kt#AnimatedVisibilityWithBooleanVisibleParamNoReceiver
+    // not ported: the sample's Box, its fixed size, background and the toggle button around the visible flag
+    // not ported: AnimatedVisibilityWithBooleanVisibleParamNoReceiver (the sample's function; its AnimatedVisibility is used here, inline)
+    val alert: @Composable () -> Unit = {
+        AnimatedVisibility(
+            visible = state.errors.isNotEmpty(),
+            enter = fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.6f) + expandHorizontally(tween(200)),
+            exit = fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.6f) + shrinkHorizontally(tween(200))
+        ) {
+            BannerAction(
+                icon = YidIcons.Warning,
+                label = "What went wrong",
+                onClick = { showFailures = true },
+                container = MaterialTheme.colorScheme.errorContainer,
+                tint = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+
+    // One glass capsule, nothing under it: the folder switch, "Search saved posts" (hidden while nobody is followed: an
+    // empty input field, as the draft draws it), the alert on a failure only. It is an item of the list, so it scrolls away
+    // with the posts and is back at the top.
+    val banner: @Composable () -> Unit = {
+        Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            AppBarWithSearch(
+                inputField = {
+                    if (state.followedCount > 0) {
+                        SearchCapsuleHint(YidIcons.Search, listOf("Search saved posts"), onOpenSearch)
+                    }
+                },
+                navigationIcon = feedSwitch,
+                actions = { alert() }
+            )
+        }
     }
 
     // A post is read once it has gone past the top of the screen. Everything
@@ -211,32 +294,31 @@ fun TimelineScreen(
         // Home is empty, failed or full, and whatever the scroll position.
         Box(Modifier.fillMaxSize()) {
         when {
-            state.followedCount == 0 -> EmptyState(
-                title = "Nothing followed yet",
-                message = "Find a few accounts and they will all appear here in one stream.",
-                actionLabel = "Open Accounts",
-                onAction = onOpenAccounts,
-                modifier = Modifier.padding(padding)
-            )
+            // Nobody followed: the capsule with the folder switch "All" and no search hint, then the empty zone weighted over
+            // what is left, so it sits in the middle of the rest and not against the capsule.
+            state.followedCount == 0 -> Column(
+                Modifier.fillMaxSize().padding(padding).padding(horizontal = LocalReadableInset.current)
+            ) {
+                banner()
+                EmptyState(
+                    title = "Nothing followed yet",
+                    message = "Find a few accounts and they will all appear here in one stream.",
+                    actionLabel = "Open Accounts",
+                    onAction = onOpenAccounts,
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
             // Pull works here too, so a failed refresh at launch does not
             // leave Home stuck until a restart.
-            state.isEmpty && state.errors.isNotEmpty() -> PullToRefreshBox(
+            state.isEmpty && state.errors.isNotEmpty() -> PullRevealBox(
                 isRefreshing = state.loading,
                 onRefresh = {
                     askedRefresh()
                     viewModel.refresh()
                 },
                 modifier = Modifier.fillMaxSize(),
-                state = pull,
-                // Under the status bar, where the list starts, not behind it.
-                indicator = {
-                    PullIndicator(
-                        state = pull,
-                        isRefreshing = state.loading,
-                        modifier = Modifier.align(Alignment.TopCenter).padding(top = padding.calculateTopPadding())
-                    )
-                }
+                state = pull
             ) {
                 // A list, because the pull gesture needs something scrollable.
                 LazyColumn(
@@ -245,14 +327,7 @@ fun TimelineScreen(
                 ) {
                     // The header stays, so a folder whose accounts all failed
                     // is not a dead end: the reader can still switch away.
-                    item(key = "home-header") {
-                        HomeHeader(
-                            state = state,
-                            onOpenSearch = onOpenSearch,
-                            onShowFailures = { showFailures = true },
-                            onChooseFolder = chooseFolder
-                        )
-                    }
+                    item(key = "home-header") { banner() }
                     item(key = "nothing") {
                         EmptyState(
                             title = "Nothing could be loaded",
@@ -265,22 +340,19 @@ fun TimelineScreen(
                 }
             }
 
-            else -> PullToRefreshBox(
+            // The pull is Yiḍ's own mark at 72 dp alone in the layer, the list in place: no disc, no count, no ring, no
+            // "Updated". The kit's PullRevealBox is the port of IndicatorBox.
+            // https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/pulltorefresh/PullToRefresh.kt#IndicatorBox
+            // not ported: IndicatorBox's clipRect, shape, containerColor, background, shadowElevation and SpinnerContainerSize
+            // (the mark has none, see PullRevealBox)
+            else -> PullRevealBox(
                 isRefreshing = state.loading,
                 onRefresh = {
                     askedRefresh()
                     viewModel.refresh()
                 },
                 modifier = Modifier.fillMaxSize(),
-                state = pull,
-                // Under the status bar, where the list starts, not behind it.
-                indicator = {
-                    PullIndicator(
-                        state = pull,
-                        isRefreshing = state.loading,
-                        modifier = Modifier.align(Alignment.TopCenter).padding(top = padding.calculateTopPadding())
-                    )
-                }
+                state = pull
             ) {
                 // Prefetch a page before the reader actually hits the bottom,
                 // so scrolling stays continuous instead of stalling.
@@ -328,14 +400,7 @@ fun TimelineScreen(
                     ),
                     modifier = Modifier.fillMaxSize().then(if (look != null) Modifier.glassSource(listBackdrop, look) else Modifier)
                 ) {
-                    item(key = "home-header") {
-                        HomeHeader(
-                            state = state,
-                            onOpenSearch = onOpenSearch,
-                            onShowFailures = { showFailures = true },
-                            onChooseFolder = chooseFolder
-                        )
-                    }
+                    item(key = "home-header") { banner() }
 
                     if (state.posts.isEmpty() && !state.loading && state.folder != null) {
                         item(key = "folder-empty") {
@@ -374,139 +439,24 @@ fun TimelineScreen(
                 }
                 }
 
-                // The folder switch never leaves: it is how the reader moves
-                // from one stream to another, and a control that only appears
-                // once you have scrolled is a control nobody finds. The way
-                // back to the top stacks with it, and only once the way back
-                // is a real chore.
+                // The way back to the top shows only once it is a real chore, bottom right above the dock, at the
+                // readable column's edge. The folder switch lives in the capsule now, the button stands alone.
                 val showBackToTop by remember {
                     derivedStateOf { listState.firstVisibleItemIndex >= BACK_TO_TOP_AFTER }
                 }
-                FolderButton(
-                    folderIcon = YidIcons.Folder,
-                    upIcon = YidIcons.ArrowUp,
-                    onClick = { choosingFolder = true },
-                    showBackToTop = showBackToTop,
-                    onBackToTop = { scope.launch { listState.animateScrollToItem(0) } }
+                ScrollUpButton(
+                    visible = showBackToTop,
+                    icon = YidIcons.ArrowUp,
+                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp + LocalReadableInset.current, bottom = 12.dp + LocalDockPadding.current)
                 )
             }
         }
         }
         }
     }
-}
-
-/**
- * Home's title, its freshness line and its two actions, as the first zone of
- * the list. Centred, because a title is data and not a row of a list.
- *
- * The actions sit on the title's own line and the freshness line runs under
- * them, so a long "Updated an hour ago" never has to fight the icons for room.
- */
-@Composable
-private fun HomeHeader(
-    state: TimelineUiState,
-    onOpenSearch: () -> Unit,
-    onShowFailures: () -> Unit,
-    /** Null until the reader has made a folder, see TimelineScreen. */
-    onChooseFolder: (() -> Unit)?
-) {
-    ZoneSurface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(28.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val failing = state.errors.isNotEmpty()
-            if (state.followedCount > 0) {
-                // Shown only when an account failed to load, the one thing
-                // here that needs noticing; a blank of the same width keeps
-                // the title centred otherwise.
-                if (failing) {
-                    BoldIconButton(
-                        onClick = onShowFailures,
-                        modifier = Modifier.size(BUTTON_SIZE),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                        ),
-                        edge = MaterialTheme.colorScheme.error
-                    ) {
-                        Icon(YidIcons.Pulse, contentDescription = "What went wrong", modifier = Modifier.size(ICON_SIZE))
-                    }
-                } else {
-                    Spacer(Modifier.size(BUTTON_SIZE))
-                }
-            }
-
-            // The two buttons are the same width, so the title lands on the
-            // centre of the zone without being measured against them.
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(20.dp))
-                    .then(
-                        if (onChooseFolder != null) {
-                            Modifier.clickable(onClickLabel = "Choose which folder to show", onClick = onChooseFolder)
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (onChooseFolder == null) {
-                    Text("Home", style = MaterialTheme.typography.titleLarge)
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            state.folder ?: "Home",
-                            style = MaterialTheme.typography.titleLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        Icon(
-                            YidIcons.ArrowDown,
-                            contentDescription = null,
-                            modifier = Modifier.padding(start = 4.dp).size(20.dp)
-                        )
-                    }
-                }
-                subtitle(state)?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            if (state.followedCount > 0) {
-                BoldIconButton(
-                    onClick = onOpenSearch,
-                    modifier = Modifier.size(BUTTON_SIZE)
-                ) {
-                    Icon(
-                        YidIcons.Search,
-                        contentDescription = "Search saved posts",
-                        modifier = Modifier.size(ICON_SIZE)
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun subtitle(state: TimelineUiState): String? = when {
-    state.followedCount == 0 -> null
-    state.loading -> "Updating"
-    state.lastUpdatedMillis != null -> relativeTime(state.lastUpdatedMillis).let { age ->
-        if (age.isEmpty() || age == "now") "Updated just now" else "Updated $age ago"
-    }
-    else -> null
 }
 
 @Composable
@@ -536,14 +486,6 @@ private fun TimelineFooter(state: TimelineUiState, onLoadMore: () -> Unit) {
         }
     }
 }
-
-/**
- * Matched to the dock at the bottom: its slots are 48 dp across and its icons
- * are Material's default 24 dp. Two controls of the same app should not be two
- * different sizes.
- */
-private val BUTTON_SIZE = 48.dp
-private val ICON_SIZE = 24.dp
 
 private const val LOAD_MORE_THRESHOLD = 5
 
