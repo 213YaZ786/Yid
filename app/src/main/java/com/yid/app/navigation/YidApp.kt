@@ -32,6 +32,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import android.net.Uri
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -136,7 +137,13 @@ fun YidApp() {
     val uris = remember(platformUris) {
         SafeUriHandler(
             platform = platformUris,
-            inApp = { uri -> links.parse(uri)?.also { show(it) } != null },
+            // A tag leads to Bluesky's search address (BskyLink.makeSearchLink): the app answers it with Search over the saved posts.
+            inApp = { uri ->
+                links.parse(uri)?.also { show(it) } != null ||
+                    Uri.parse(uri).takeIf { it.host == "bsky.app" && it.path == "/search" }?.getQueryParameter("q")
+                        ?.takeIf { it.isNotBlank() }
+                        ?.also { navController.navigate(Routes.SEARCH_PATTERN.replace("{query}", Uri.encode(it))) } != null
+            },
             onRefused = { Toast.makeText(context, "Link not opened", Toast.LENGTH_SHORT).show() },
             intermediary = { asked = it }
         )
@@ -209,11 +216,21 @@ private fun YidNavHost(navController: NavHostController) {
                 )
                 }
             }
-            composable(Routes.SEARCH) {
+            composable(
+                route = Routes.SEARCH_PATTERN,
+                arguments = listOf(
+                    navArgument("query") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                )
+            ) { entry ->
                 CompositionLocalProvider(LocalNavAnimatedScope provides this) {
                 ReadableScroll {
                     SearchScreen(
                         onBack = { navController.popBackStack() },
+                        initialQuery = entry.arguments?.getString("query"),
                         onOpenPost = { post -> navController.navigate(Routes.post(post.id, post.cacheOwner())) }
                     )
                 }

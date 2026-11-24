@@ -26,7 +26,15 @@ data class Post(
     val media: List<MediaItem> = emptyList(),
     val quoted: QuotedPost? = null,
     val card: LinkCard? = null,
-    val stats: PostStats? = null
+    val stats: PostStats? = null,
+    /**
+     * The author's verification state: a verified account or a trusted verifier. A default, so a cache written
+     * before this field still reads.
+     * https://github.com/bluesky-social/atproto/blob/main/packages/api/lexicons/app/bsky/actor/defs.json#verificationState
+     */
+    val authorVerified: Boolean = false,
+    /** The facets of [text], see [Facet]. A default, so a cache written before this field still reads. */
+    val facets: List<Facet> = emptyList()
 ) {
     /**
      * The same post seen again. The stored post keeps its identity, which
@@ -41,11 +49,31 @@ data class Post(
             media = media.ifEmpty { fresh.media },
             quoted = fresh.quoted ?: quoted,
             card = fresh.card ?: card,
+            authorVerified = fresh.authorVerified,
+            facets = facets.ifEmpty { fresh.facets },
             stats = stats?.let { old -> fresh.stats?.let(old::mergedWith) ?: old } ?: fresh.stats
         )
         return if (merged == this) this else merged
     }
 }
+
+/**
+ * A facet of a post's text as app.bsky.richtext.facet#main gives it: where it is ([index], a byteSlice counted in
+ * UTF-8 bytes of the text, start inclusive, end exclusive) and what it is ([features]). The type of Bluesky's
+ * `Facet = AppBskyRichtextFacet.Main` and the field names of its `facetSort` and `facetFilter`:
+ * https://github.com/bluesky-social/atproto/blob/main/packages/api/src/rich-text/rich-text.ts#L379-L383
+ * not ported: facetSort (PostText.kt's RichText takes it)
+ * not ported: facetFilter (PostText.kt's RichText takes it)
+ */
+@Serializable
+data class Facet(val index: ByteSlice, val features: List<FacetFeature>)
+
+@Serializable
+data class ByteSlice(val byteStart: Int, val byteEnd: Int)
+
+/** One of the lexicon's #mention (its [did]), #link (its [uri]) or #tag (its [tag], without the #). */
+@Serializable
+data class FacetFeature(val did: String? = null, val uri: String? = null, val tag: String? = null)
 
 @Serializable
 enum class PostKind { ORIGINAL, REPOST, REPLY, QUOTE }
@@ -122,7 +150,9 @@ data class Feed(
     val bannerUrl: String? = null,
     /** For example "Joined March 2023". */
     val joined: String? = null,
-    val stats: ProfileStats? = null
+    val stats: ProfileStats? = null,
+    /** The account's verification state from getProfile; null when no profile was read. */
+    val verified: Boolean? = null
 )
 
 /** The numbers on a profile card. Any may be missing. */

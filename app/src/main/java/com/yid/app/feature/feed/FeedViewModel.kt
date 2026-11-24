@@ -27,6 +27,11 @@ data class FeedUiState(
     val canLoadMore: Boolean get() = feed?.nextCursor != null
 }
 
+// Compared with LinkedOut's FeedViewModel for the profile header (requests.md point 16): the state it feeds the screen
+// (loading, feed, error) is the same, the pull reads `loading` with a feed on screen, so nothing of it changes here.
+// https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/feed/FeedViewModel.kt#FeedViewModel
+// not ported: kind, AccountKind and knownKind (LinkedIn's person and company pages: a Bluesky account is one kind)
+// not ported: AutoMediaDownloader and media.consider (a profile's posts saved for offline reading: requests.md point 25)
 class FeedViewModel(
     private val repository: FeedRepository,
     private val accounts: AccountStore,

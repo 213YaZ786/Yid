@@ -1,5 +1,8 @@
 package com.yid.app.core.link
 
+import java.net.URLDecoder
+import java.net.URLEncoder
+
 /**
  * What a Bluesky link points at. Pure, no Android.
  *
@@ -18,6 +21,16 @@ sealed interface BskyLink {
     }
 
     companion object {
+
+        /**
+         * Bluesky's own address of a search, where a tag leads: `/search?q=` and the query encoded, with the posts of
+         * one account asked as ` from:<handle>`.
+         * https://github.com/bluesky-social/social-app/blob/main/src/lib/routes/links.ts#makeSearchLink
+         */
+        fun makeSearchLink(query: String, from: String? = null): String =
+            "https://bsky.app/search?q=" + encodeURIComponent(query + (from?.let { " from:$it" } ?: ""))
+
+        private fun encodeURIComponent(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
         fun parse(raw: String): BskyLink? {
             val trimmed = raw.trim()

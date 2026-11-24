@@ -23,6 +23,13 @@ object Routes {
     const val FEED_PATTERN = "feed/{handle}"
     const val DEBUG_LOG = "debuglog"
     const val SEARCH = "search"
+
+    /**
+     * Search with its field already filled (a tag tapped in a post): the optional query argument of Navigation's
+     * Kotlin DSL, as POST_PATTERN's `from`.
+     * https://developer.android.com/guide/navigation/design/kotlin-dsl
+     */
+    const val SEARCH_PATTERN = "search?query={query}"
     const val SAVED_MEDIA = "savedmedia"
     const val FOLDERS = "folders"
 

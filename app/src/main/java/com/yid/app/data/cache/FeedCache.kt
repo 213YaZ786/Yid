@@ -151,6 +151,7 @@ class FeedCache(
             bannerUrl = incoming.bannerUrl ?: existing.bannerUrl,
             joined = incoming.joined ?: existing.joined,
             stats = incoming.stats ?: existing.stats,
+            verified = incoming.verified ?: existing.verified,
             nextCursor = when {
                 exhausted -> null
                 keepDeeperCursor -> existing.nextCursor

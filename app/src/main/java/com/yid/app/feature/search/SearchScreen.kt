@@ -61,8 +61,11 @@ import org.koin.compose.koinInject
 fun SearchScreen(
     onBack: () -> Unit,
     onOpenPost: (Post) -> Unit,
+    /** A tag tapped in a post opens Search with it typed in. */
+    initialQuery: String? = null,
     viewModel: SearchViewModel = koinViewModel()
 ) {
+    LaunchedEffect(initialQuery) { initialQuery?.let(viewModel::setQuery) }
     val state by viewModel.state.collectAsState()
     val typed by viewModel.typed.collectAsState()
     val uriHandler = LocalUriHandler.current

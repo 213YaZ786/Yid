@@ -2,7 +2,10 @@ package com.yid.app.data.bsky
 
 import com.yid.app.core.link.BskyLink
 import com.yid.app.core.model.Actor
+import com.yid.app.core.model.ByteSlice
 import com.yid.app.core.model.Conversation
+import com.yid.app.core.model.Facet
+import com.yid.app.core.model.FacetFeature
 import com.yid.app.core.model.Feed
 import com.yid.app.core.model.LinkCard
 import com.yid.app.core.model.MediaItem
@@ -52,7 +55,8 @@ internal object BskyParser {
             joined = profile?.text("createdAt")?.let(::joinedLabel),
             stats = profile?.let {
                 ProfileStats(posts = it.long("postsCount"), following = it.long("followsCount"), followers = it.long("followersCount"))
-            }
+            },
+            verified = profile?.let(::isVerified)
         )
     }
 
@@ -107,7 +111,7 @@ internal object BskyParser {
         obj(searchJson)?.array("actors").orEmpty().mapNotNull { element ->
             val actor = element as? JsonObject ?: return@mapNotNull null
             val handle = actor.text("handle") ?: return@mapNotNull null
-            Actor(handle = handle, displayName = actor.text("displayName"), avatarUrl = actor.text("avatar")?.let(::thumbnail), description = actor.text("description"))
+            Actor(handle = handle, displayName = actor.text("displayName"), avatarUrl = actor.text("avatar")?.let(::thumbnail), description = actor.text("description"), verified = isVerified(actor))
         }
 
     private fun feedItem(item: JsonObject): Post? {
@@ -155,7 +159,9 @@ internal object BskyParser {
                 reposts = view.int("repostCount"),
                 quotes = view.int("quoteCount"),
                 likes = view.int("likeCount")
-            )
+            ),
+            authorVerified = isVerified(author),
+            facets = facets(record)
         )
     }
 
@@ -258,6 +264,60 @@ internal object BskyParser {
         "Joined " + JOINED.format(Instant.ofEpochMilli(it))
     }
 
+    /**
+     * Whether a profile (a getProfile answer, a post's author or a search result) carries Bluesky's check: its
+     * verification state, app.bsky.actor.defs#verificationState (https://github.com/bluesky-social/atproto/blob/main/packages/api/lexicons/app/bsky/actor/defs.json#verificationState),
+     * reads "valid" as a verified user or as a trusted verifier, both with the one mark. "invalid", "none" and a missing
+     * `verification` are not verified.
+     * https://github.com/bluesky-social/social-app/blob/main/src/components/verification/index.ts#useSimpleVerificationState
+     * not ported: useFullVerificationState (the viewer's own state, a reader has no account)
+     * not ported: role, showBadge and the hideBadges preference (a verifier shows the same mark, there is no account preference)
+     */
+    internal fun isVerified(profile: JsonObject): Boolean {
+        val verification = profile.obj("verification") ?: return false
+        val verifiedStatus = verification.text("verifiedStatus")
+        val trustedVerifierStatus = verification.text("trustedVerifierStatus")
+        val isVerifiedUser = verifiedStatus == "valid" || verifiedStatus == "invalid"
+        val isVerifierUser = trustedVerifierStatus == "valid" || trustedVerifierStatus == "invalid"
+        return (isVerifiedUser && verifiedStatus == "valid") || (isVerifierUser && trustedVerifierStatus == "valid")
+    }
+
+    /**
+     * The facets of a post record, app.bsky.richtext.facet#main (https://github.com/bluesky-social/atproto/blob/main/packages/api/lexicons/app/bsky/richtext/facet.json#main):
+     * each one's index (byteStart, byteEnd) and its features, the mention, link and tag kinds; a feature of another kind
+     * is left out and a facet with none is dropped. As RichText's constructor keeps them: the facets that are not
+     * negative-length (facetFilter), sorted by where they start (facetSort). The indices stay UTF-8 byte offsets of the
+     * text, as Bluesky keeps them: the slice is decoded by RichText.segments (feature/post/PostText.kt).
+     * https://github.com/bluesky-social/atproto/blob/main/packages/api/src/rich-text/rich-text.ts#L157-L169
+     * https://github.com/bluesky-social/atproto/blob/main/packages/api/src/rich-text/rich-text.ts#L379-L383
+     * not ported: props.entities, entitiesToFacets and cleanNewlines (the deprecated entities and the sanitizing of
+     * a text to be written, a reader only reads records the AppView already holds)
+     */
+    internal fun facets(record: JsonObject): List<Facet> {
+        val facets = record.array("facets").mapNotNull { currFacet ->
+            val facet = currFacet as? JsonObject ?: return@mapNotNull null
+            val index = facet.obj("index") ?: return@mapNotNull null
+            val byteStart = index.int("byteStart") ?: return@mapNotNull null
+            val byteEnd = index.int("byteEnd") ?: return@mapNotNull null
+            val features = facet.array("features").mapNotNull { feature ->
+                val link = feature as? JsonObject ?: return@mapNotNull null
+                when (link.text("\$type")) {
+                    FACET_MENTION -> link.text("did")?.let { FacetFeature(did = it) }
+                    FACET_LINK -> link.text("uri")?.let { FacetFeature(uri = it) }
+                    FACET_TAG -> link.text("tag")?.let { FacetFeature(tag = it) }
+                    else -> null
+                }
+            }
+            if (features.isEmpty()) null else Facet(ByteSlice(byteStart, byteEnd), features)
+        }
+        return facets.filter(::facetFilter).sortedWith(::facetSort)
+    }
+
+    private fun facetSort(a: Facet, b: Facet) = a.index.byteStart - b.index.byteStart
+
+    // Discard negative-length facets. Zero-length facets are valid.
+    private fun facetFilter(facet: Facet) = facet.index.byteStart <= facet.index.byteEnd
+
     private fun obj(text: String): JsonObject? = runCatching { json.parseToJsonElement(text) as? JsonObject }.getOrNull()
     private fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject
     private fun JsonObject.array(key: String): List<JsonElement> = (this[key] as? JsonArray).orEmpty()
@@ -272,6 +332,8 @@ internal object BskyParser {
     private const val REASON_REPOST = "app.bsky.feed.defs#reasonRepost"
     private const val REASON_PIN = "app.bsky.feed.defs#reasonPin"
     private const val FACET_LINK = "app.bsky.richtext.facet#link"
+    private const val FACET_MENTION = "app.bsky.richtext.facet#mention"
+    private const val FACET_TAG = "app.bsky.richtext.facet#tag"
     private const val EMBED_IMAGES = "app.bsky.embed.images#view"
     private const val EMBED_VIDEO = "app.bsky.embed.video#view"
     private const val EMBED_EXTERNAL = "app.bsky.embed.external#view"

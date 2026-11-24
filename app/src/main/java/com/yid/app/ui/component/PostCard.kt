@@ -31,7 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import com.yid.app.feature.post.facetText
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -106,7 +108,13 @@ fun PostCard(
 
             // The content takes the whole width of the card, under the header.
             if (post.text.isNotBlank()) {
-                Text(post.text, style = MaterialTheme.typography.bodyLarge)
+                // The facets drawn in the primary (a link, a mention, a tag, each tappable); a post read before
+                // facets were kept stays plain text.
+                val linkColor = MaterialTheme.colorScheme.primary
+                val body = remember(post.id, post.text, post.facets, linkColor) {
+                    if (post.facets.isEmpty()) AnnotatedString(post.text) else facetText(post.text, post.facets, linkColor)
+                }
+                Text(body, style = MaterialTheme.typography.bodyLarge)
             }
 
             if (post.media.isNotEmpty()) {
@@ -195,6 +203,9 @@ private fun NameRow(post: Post, unread: Boolean, modifier: Modifier = Modifier) 
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
+            // Bluesky's PostMeta puts the verified badge right after the display name, outside its Text so a long name
+            // ellipsizes without taking it along; the dot follows it.
+            if (post.authorVerified) VerificationCheck(Modifier.padding(start = 4.dp), size = 16.dp)
             // Arrived since the last visit and not yet scrolled past. The dot sits on
             // the line it marks, centred on it, as Fossify Messages' item_conversation.xml (https://github.com/FossifyOrg/Messages/blob/main/app/src/main/res/layout/item_conversation.xml).
             NewDot(unread, Modifier.padding(start = 8.dp))
