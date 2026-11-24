@@ -21,7 +21,15 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Box
 import org.koin.compose.koinInject
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -149,8 +157,7 @@ fun FoldersScreen(
     // gesture goes back. The page's ground is painted under the whole app, see MainActivity. The list is recorded as the
     // glass backdrop, so the + bends it as it floats over.
     // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/accounts/FoldersScreen.kt#FoldersScreen
-    // not ported: AnimatedContent with fadeThrough on the count, Open and the filed check, animateItem on the zones
-    // (point 18, not now), SimpleAnimatedContentSample's fadeThrough
+    // The zones are animated items (animateItem, stable keys); the count, Open and the filed check fade through (FolderZone).
     // not ported: LinkedOut's LinkedOutIcons (YidIcons), its Zone and ZoneGap (Yiḍ's FolderZone keeps its ZoneSurface)
     val settings by store.settings.collectAsState()
     val statusTop = statusBarTop()
@@ -184,6 +191,7 @@ fun FoldersScreen(
                     name = name,
                     rows = rows,
                     open = open == name,
+                    modifier = Modifier.animateItem(),
                     onToggle = { open = if (open == name) null else name },
                     onRename = { renaming = name },
                     onDelete = { deleting = name },
@@ -215,12 +223,13 @@ private fun FolderZone(
     onToggle: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
-    onFile: (AccountRow) -> Unit
+    onFile: (AccountRow) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val count = rows.count { it.folder == name }
     ZoneSurface(
         shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
         Column {
             Row(
@@ -229,15 +238,17 @@ private fun FolderZone(
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        when (count) {
-                            0 -> "Empty"
-                            1 -> "1 account"
-                            else -> "$count accounts"
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    AnimatedContent(targetState = count, transitionSpec = fadeThrough(), label = "folderCount") { shown ->
+                        Text(
+                            when (shown) {
+                                0 -> "Empty"
+                                1 -> "1 account"
+                                else -> "$shown accounts"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 if (name != FollowedAccount.MAIN) {
                     BoldButton(onClick = onRename) { Text("Rename") }
@@ -245,7 +256,11 @@ private fun FolderZone(
                         Icon(YidIcons.Delete, contentDescription = "Delete $name", modifier = Modifier.size(20.dp))
                     }
                 }
-                BoldButton(onClick = onToggle) { Text(if (open) "Close" else "Open") }
+                BoldButton(onClick = onToggle) {
+                    AnimatedContent(targetState = open, transitionSpec = fadeThrough(), label = "folderOpen") { opened ->
+                        Text(if (opened) "Close" else "Open")
+                    }
+                }
             }
 
             AnimatedVisibility(visible = open) {
@@ -286,15 +301,17 @@ private fun FolderZone(
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f).padding(start = 10.dp)
                                 )
-                                if (here) {
-                                    Icon(YidIcons.Check, contentDescription = "Filed here", modifier = Modifier.size(18.dp))
-                                } else {
-                                    Text(
-                                        row.folder,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1
-                                    )
+                                AnimatedContent(targetState = here, transitionSpec = fadeThrough(), label = "folderCheck") { filed ->
+                                    if (filed) {
+                                        Icon(YidIcons.Check, contentDescription = "Filed here", modifier = Modifier.size(18.dp))
+                                    } else {
+                                        Text(
+                                            row.folder,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -303,6 +320,15 @@ private fun FolderZone(
             }
         }
     }
+}
+
+// A swap through nothing: the old content out first (90 ms), the new one in after it (110 ms, 90 ms later), never
+// clipped while the size changes (SizeTransform). Material 3's fade through, as AnimatedContent's sample swaps its states:
+// https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/accounts/FoldersScreen.kt#fadeThrough
+// https://github.com/androidx/androidx/blob/androidx-main/compose/animation/animation/samples/src/main/java/androidx/compose/animation/samples/AnimatedContentSamples.kt#SimpleAnimatedContentSample
+// not ported: SimpleAnimatedContentSample's ContentState, Foo, Bar, Baz and their boxes (the states are the count, open and filed)
+private fun <S> fadeThrough(): AnimatedContentTransitionScope<S>.() -> ContentTransform = {
+    (fadeIn(tween(110, delayMillis = 90)) togetherWith fadeOut(tween(90))).using(SizeTransform(clip = false))
 }
 
 // New folder and Rename take the kit's DialogNameField (Android Files' New folder field): label that rises, cursor at the

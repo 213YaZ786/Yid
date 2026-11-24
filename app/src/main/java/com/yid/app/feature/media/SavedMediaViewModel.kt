@@ -16,7 +16,6 @@ import kotlinx.coroutines.withContext
 // served them is left out and the deletes go file by file through delete().
 // not ported: offline.version collect in init (OfflineMedia keeps no version: the grid reads again after each delete and on open)
 // not ported: deleteAll (the validated picture has no Delete all, and OfflineMedia.clear stays where Settings uses it)
-// not ported: offline.stillPaths (no video stills are kept: a video's cell draws the plain play mark)
 
 // Yiḍ's own earlier model, no longer read by the screen: SavedMediaDraftScreenshotTest still draws today's picture
 // ("saved_media_now") from it, which stays as the proof of what the point changed.
@@ -118,12 +117,15 @@ class SavedMediaViewModel(private val offline: OfflineMedia) : ViewModel() {
         viewModelScope.launch { reload() }
     }
 
-    /** The folder read once and built into the rows. */
+    /** The folder and the stills read once and built into the rows. */
+    // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/storage/SavedMediaViewModel.kt#reload
     private suspend fun reload() {
         val entries = offline.entries()
+        // Reads the folder again too.
+        val stills = offline.stillPaths()
         val built = withContext(Dispatchers.Default) {
             val sized = entries.map { Auto(it.handle, it.postId, it.index, it.file.path, it.file.length()) }
-            build(sized, emptyMap())
+            build(sized, stills)
         }
         _state.value = built.copy(loading = false)
     }

@@ -8,8 +8,14 @@ import android.util.Log
 import com.yid.app.core.model.MediaItem
 import com.yid.app.core.model.MediaType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.URLDecoder
+import java.net.URLEncoder
 
 /**
  * Where automatically saved media lives, so a post can be watched with no
@@ -26,6 +32,14 @@ import java.io.File
  * is everything needed to go from a post on screen to a file on disk and
  * back. A database for that would be a second copy of the truth, free to
  * disagree with the folder.
+ *
+ * A video is saved with its still (its cover, from the item's previewUrl), so the post shows its picture offline too.
+ * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/core/media/OfflineMedia.kt#OfflineMedia
+ * not ported: getMediafilePath, FileNameGenerator and the folder per account (LinkedOut's AntennaPod naming, Yiḍ keeps the
+ * handle in the file name: SavedMedia and Settings read it there)
+ * not ported: parseFile and files() (their only job is the account folders)
+ * not ported: the deletion of the flat files written before the account folders (Yiḍ never wrote any)
+ * not ported: deleteWhere (nothing here calls it, SavedMediaViewModel deletes by entries())
  */
 class OfflineMedia(context: Context) {
 
@@ -40,9 +54,26 @@ class OfflineMedia(context: Context) {
     private val directory =
         File(context.getExternalFilesDir(null) ?: context.filesDir, "media").apply { mkdirs() }
 
+    private val _version = MutableStateFlow(0)
+
+    /**
+     * Counts every change of what is saved, a file landing or going, so a
+     * screen that is open reads the index again at once instead of at its next
+     * resume. Compose keys on it, see rememberMediaSource.
+     * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/core/media/OfflineMedia.kt#version
+     */
+    val version: StateFlow<Int> = _version.asStateFlow()
+
     /** Where [item] of [postId] is, or would be. Never null, may not exist. */
     fun fileFor(postId: String, authorHandle: String, index: Int, item: MediaItem): File =
         File(directory, name(postId, authorHandle, index, item))
+
+    /**
+     * Where the still of a video of [postId] is, or would be. Same scheme as [fileFor].
+     * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/core/media/OfflineMedia.kt#stillFor
+     */
+    fun stillFor(postId: String, authorHandle: String, index: Int, item: MediaItem): File =
+        File(directory, stillName(postId, authorHandle, index, item))
 
     /**
      * postId and position to absolute path, for everything on disk.
@@ -54,8 +85,14 @@ class OfflineMedia(context: Context) {
     @Volatile
     private var index: Map<String, String> = emptyMap()
 
+    /** The same for the stills of videos. */
+    @Volatile
+    private var stills: Map<String, String> = emptyMap()
+
     /**
      * Re-reads the folder, one listing and one question to DownloadManager.
+     * Bumps [version] only when something moved, so a pass that found nothing
+     * new recomposes nothing.
      *
      * A file DownloadManager is still writing is no copy yet, and the part
      * file of a transfer that failed is removed with its row, otherwise the
@@ -73,9 +110,19 @@ class OfflineMedia(context: Context) {
             transfers.failed[file.absolutePath]?.let { id -> runCatching { manager?.remove(id) } }
             runCatching { file.delete() }
         }
-        index = (listed - active.toSet() - cancelled.toSet()).mapNotNull { file ->
-            parse(file.name)?.let { key(it.postId, it.index) to file.absolutePath }
-        }.toMap()
+        val main = HashMap<String, String>()
+        val still = HashMap<String, String>()
+        (listed - active.toSet() - cancelled.toSet()).forEach { file ->
+            val parsed = parse(file.name) ?: return@forEach
+            // A file DownloadManager has not finished writing is no copy yet.
+            if (file.length() == 0L) return@forEach
+            (if (parsed.still) still else main)[key(parsed.postId, parsed.index)] = file.absolutePath
+        }
+        if (main != index || still != stills) {
+            index = main
+            stills = still
+            _version.update { it + 1 }
+        }
     }
 
     /**
@@ -160,14 +207,34 @@ class OfflineMedia(context: Context) {
      */
     fun localPath(postId: String, position: Int): String? = index[key(postId, position)]
 
+    /**
+     * The saved still of a video, or null. Same index as [localPath].
+     * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/core/media/OfflineMedia.kt#localStill
+     */
+    fun localStill(postId: String, position: Int): String? = stills[key(postId, position)]
+
     private fun key(postId: String, position: Int) = "$postId/$position"
 
-    /** Everything on disk, newest file first. */
+    /**
+     * The copies on disk, stills left out, newest file first.
+     * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/core/media/OfflineMedia.kt#entries
+     */
     suspend fun entries(): List<Entry> = withContext(Dispatchers.IO) {
         directory.listFiles()
             .orEmpty()
-            .mapNotNull { file -> parse(file.name)?.let { Entry(file, it.handle, it.postId, it.index) } }
+            .mapNotNull { file ->
+                parse(file.name)?.takeIf { !it.still }?.let { Entry(file, it.handle, it.postId, it.index) }
+            }
             .sortedByDescending { it.file.lastModified() }
+    }
+
+    /**
+     * The saved still of each video of the folder, by post id and position. Same listing as [refresh].
+     * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/core/media/OfflineMedia.kt#stillPaths
+     */
+    suspend fun stillPaths(): Map<String, String> = withContext(Dispatchers.IO) {
+        refresh()
+        stills
     }
 
     suspend fun sizeBytes(): Long = withContext(Dispatchers.IO) {
@@ -209,12 +276,14 @@ class OfflineMedia(context: Context) {
     /** One saved file, with the post it came from. */
     data class Entry(val file: File, val handle: String, val postId: String, val index: Int)
 
-    /** What a file name says about the media it holds. */
-    internal data class Parsed(val handle: String, val postId: String, val index: Int)
+    /** What a file name says about the media it holds. A [still] is the picture of a saved video. */
+    internal data class Parsed(val handle: String, val postId: String, val index: Int, val still: Boolean = false)
 
     companion object {
         /** The sub directory of the app's files folder, shared with the downloader. */
         const val FOLDER = "media"
+
+        private const val STILL = "still"
 
         private const val LOG = "OfflineMedia"
 
@@ -246,15 +315,44 @@ class OfflineMedia(context: Context) {
                 MediaType.PHOTO -> extensionOf(item.downloadUrl, "jpg")
                 else -> extensionOf(item.downloadUrl, "mp4")
             }
-            return "${authorHandle.lowercase()}__${postId}__$index.$extension"
+            return "${authorHandle.lowercase()}__${baseName(postId)}__$index.$extension"
         }
 
+        /**
+         * The name of the still of a video: [name]'s parts with a "still" part
+         * and a picture extension.
+         * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/core/media/OfflineMedia.kt#stillName
+         */
+        internal fun stillName(postId: String, authorHandle: String, index: Int, item: MediaItem): String =
+            "${authorHandle.lowercase()}__${baseName(postId)}__${index}__$STILL.jpg"
+
+        /**
+         * A Bluesky post id is an at-URI, slashes and colons that no file name
+         * can hold, and the index key is the id itself, so the part is the id
+         * encoded and decoded whole by [parse], never stripped.
+         * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/core/media/OfflineMedia.kt#baseName
+         * not ported: FileNameGenerator.generateFileName (it drops characters, the id could not come back)
+         */
+        private fun baseName(postId: String): String {
+            var baseFilename = URLEncoder.encode(postId, "UTF-8")
+            val filenameMaxLength = 220
+            if (baseFilename.length > filenameMaxLength) {
+                baseFilename = baseFilename.substring(0, filenameMaxLength)
+            }
+            return baseFilename
+        }
+
+        /**
+         * What a file name says about its media: a name of three parts, or of four with "still" last.
+         * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/core/media/OfflineMedia.kt#parse
+         */
         internal fun parse(fileName: String): Parsed? {
             val parts = fileName.substringBeforeLast('.').split("__")
-            if (parts.size != 3) return null
+            if (parts.size != 3 && !(parts.size == 4 && parts[3] == STILL)) return null
             val index = parts[2].toIntOrNull() ?: return null
             if (parts[0].isEmpty() || parts[1].isEmpty()) return null
-            return Parsed(parts[0], parts[1], index)
+            val postId = runCatching { URLDecoder.decode(parts[1], "UTF-8") }.getOrNull() ?: return null
+            return Parsed(parts[0], postId, index, still = parts.size == 4)
         }
 
         private fun extensionOf(url: String, fallback: String): String {

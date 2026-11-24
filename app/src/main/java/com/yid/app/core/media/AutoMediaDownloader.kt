@@ -1,6 +1,8 @@
 package com.yid.app.core.media
 
 import com.yid.app.core.debug.RequestLog
+import com.yid.app.core.model.MediaItem
+import com.yid.app.core.model.MediaType
 import com.yid.app.core.model.Post
 import com.yid.app.core.network.ConnectivityMonitor
 import com.yid.app.data.settings.AutoDownload
@@ -15,7 +17,15 @@ import kotlinx.coroutines.withContext
  * Into the app's own folder through [OfflineMedia], never into Downloads: the
  * point is offline reading, not filling the reader's drawer.
  *
- * Driven by a refresh of Home and by nothing else. There is no service, no
+ * A video is saved with its still (its cover), so the post shows its picture offline too.
+ * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/core/media/AutoMediaDownloader.kt#AutoMediaDownloader
+ * not ported: the catch-up pass (catchUp, Want, autoDownloadCandidates, dropDownloaded, episodeSpaceLeft, deviceCharging,
+ * powerAllows: AntennaPod's second pass over the stored posts, with SaveAttempts, FeedCache and the power gate it needs;
+ * requests.md point 25 asks for the still and the profile's queue only, so the older pages' media waits for it)
+ * not ported: allows (Yiḍ's consider keeps its own inline test of the mode, AutoDownload.OFF, UNMETERED and ANY)
+ * not ported: VideoSources and the context, cache, clock and attempts parameters (LinkedIn's signed addresses)
+ *
+ * Driven by a refresh of Home or of a profile, an older page of a profile, and by nothing else. There is no service, no
  * scheduled job and no work manager task behind this: with the app off screen
  * nothing downloads, which is the app's own rule and is stated here so the
  * next reader of this file does not go looking for the missing worker.
@@ -65,10 +75,7 @@ class AutoMediaDownloader(
 
         val ids = mutableListOf<Long>()
         fresh.forEach { post ->
-            post.media.forEachIndexed { index, item ->
-                val target = store.fileFor(post.id, post.authorHandle, index, item)
-                downloader.cache(target, item)?.let(ids::add)
-            }
+            post.media.forEachIndexed { index, item -> queue(post, index, item, ids) }
         }
         val queued = ids.size
         // Returns at once: the batch outlives this call, and the timeline must
@@ -83,6 +90,23 @@ class AutoMediaDownloader(
                 " | watermark now: $watermark"
         )
         queued
+    }
+
+    /**
+     * The still of a video, then the video itself, each when it is not on disk yet.
+     * https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/core/media/AutoMediaDownloader.kt#queue
+     * The still is fetched with the item's previewUrl as its address, so [MediaDownloader.cache] takes the item
+     * with that address in place of the video's.
+     * not ported: the metered flag of cache and the names list (SaveAttempts, point 25 does not ask for it)
+     * not ported: addressOf (LinkedIn's profile page names a video without its address, a Bluesky video always has its playlist)
+     */
+    private suspend fun queue(post: Post, index: Int, item: MediaItem, ids: MutableList<Long>) {
+        if (item.type != MediaType.PHOTO && item.previewUrl.isNotBlank()) {
+            val still = store.stillFor(post.id, post.authorHandle, index, item)
+            downloader.cache(still, item.copy(downloadUrl = item.previewUrl))?.let { ids += it }
+        }
+        val target = store.fileFor(post.id, post.authorHandle, index, item)
+        downloader.cache(target, item)?.let { ids += it }
     }
 
     /**

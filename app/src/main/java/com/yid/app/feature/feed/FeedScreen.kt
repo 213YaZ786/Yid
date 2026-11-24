@@ -1,6 +1,14 @@
 package com.yid.app.feature.feed
 
 import com.yid.app.ui.component.ZoneAlertDialog
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import com.yid.app.ui.component.QuietButton
 import androidx.compose.ui.graphics.Color
 import com.yid.app.ui.component.RejectOnFailure
@@ -55,6 +63,9 @@ import com.yid.app.ui.component.rememberInlineTarget
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
+// https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/feed/FeedScreen.kt#FeedFooter
+private enum class FeedFooter { Loading, Retry, More, End }
+
 /**
  * One account: Bluesky's compact profile header as the list's first item, then its posts.
  *
@@ -66,7 +77,7 @@ import org.koin.compose.koinInject
  * not ported: kind and AccountKind (LinkedIn's person and company pages: a Bluesky account is one kind)
  * not ported: PullToRefreshBox and LinkedOut's own PullIndicator (Yiḍ calls the kit's PullRevealBox, requests.md point 3)
  * not ported: LinkedOut's glass backdrop under the list and ScrollUpButton (Yiḍ's profile has neither today)
- * not ported: FeedFooter and its AnimatedContent, animateItem of the rows and "LinkedIn shows no posts" (requests.md point 18, the animations)
+ * not ported: "LinkedIn shows no posts" (LinkedIn's visitor wall; Bluesky has none)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -225,7 +236,7 @@ fun FeedScreen(
                         // profile already shown has the pull's own mark.
                         if (state.loading && feed == null) {
                             item(key = "loading") {
-                                Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
+                                Box(Modifier.fillMaxWidth().padding(48.dp).animateItem(), contentAlignment = Alignment.Center) {
                                     LoadingMark(size = 72.dp)
                                 }
                             }
@@ -234,7 +245,7 @@ fun FeedScreen(
                         state.error?.let {
                             item(key = "error") {
                                 ErrorPanel(
-                                    modifier = Modifier.padding(horizontal = LocalReadableInset.current).padding(16.dp),
+                                    modifier = Modifier.padding(horizontal = LocalReadableInset.current).padding(16.dp).animateItem(),
                                     error = it,
                                     onRetry = viewModel::refresh
                                 )
@@ -258,20 +269,41 @@ fun FeedScreen(
                         }
 
                         item(key = "footer") {
+                            // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/feed/FeedScreen.kt#FeedScreen
+                            // https://github.com/androidx/androidx/blob/androidx-main/compose/animation/animation/samples/src/main/java/androidx/compose/animation/samples/AnimatedContentSamples.kt#SimpleAnimatedContentSample
+                            // The footer's states (mark, button, text) fade through one another: animateContentSize is the
+                            // one animator of the height, so AnimatedContent's own size change snaps.
+                            // not ported: FeedScreen (the screen is this file's own, only the footer and the animated items are taken)
+                            // not ported: simpleAnimatedContentSample (the sample's function; its AnimatedContent is used here, inline)
+                            // not ported: foo, bar, baz (the sample's own demo functions)
+                            val footer = when {
+                                loadingMore -> FeedFooter.Loading
+                                canMore -> if (pagingFailed) FeedFooter.Retry else FeedFooter.More
+                                else -> FeedFooter.End
+                            }
                             Box(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = LocalReadableInset.current).padding(24.dp),
+                                modifier = Modifier.animateItem().fillMaxWidth().padding(horizontal = LocalReadableInset.current).animateContentSize().padding(24.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                when {
-                                    loadingMore -> LoadingMark(size = 28.dp)
-                                    canMore -> BoldButton(onClick = { viewModel.loadMore(manual = true) }) {
-                                        Text(if (pagingFailed) "Try again" else "Load older posts")
+                                AnimatedContent(
+                                    targetState = footer,
+                                    transitionSpec = {
+                                        (fadeIn(tween(110, delayMillis = 90)) togetherWith fadeOut(tween(90)))
+                                            .using(SizeTransform(clip = false) { _, _ -> snap() })
+                                    },
+                                    label = "feedFooter"
+                                ) { shown ->
+                                    when (shown) {
+                                        FeedFooter.Loading -> LoadingMark(size = 28.dp)
+                                        FeedFooter.Retry, FeedFooter.More -> BoldButton(onClick = { viewModel.loadMore(manual = true) }) {
+                                            Text(if (shown == FeedFooter.Retry) "Try again" else "Load older posts")
+                                        }
+                                        FeedFooter.End -> Text(
+                                            "No older posts available.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
-                                    else -> Text(
-                                        "No older posts available.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
                                 }
                             }
                         }

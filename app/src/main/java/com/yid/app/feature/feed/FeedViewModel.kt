@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.yid.app.core.common.AppError
 import com.yid.app.core.common.Outcome
 import com.yid.app.core.common.valueOrNull
+import com.yid.app.core.media.AutoMediaDownloader
 import com.yid.app.core.model.Feed
 import com.yid.app.core.model.FollowedAccount
 import com.yid.app.core.model.Post
@@ -31,11 +32,13 @@ data class FeedUiState(
 // (loading, feed, error) is the same, the pull reads `loading` with a feed on screen, so nothing of it changes here.
 // https://github.com/213YaZ786/LinkedOut/blob/main/app/src/main/java/com/linkedout/app/feature/feed/FeedViewModel.kt#FeedViewModel
 // not ported: kind, AccountKind and knownKind (LinkedIn's person and company pages: a Bluesky account is one kind)
-// not ported: AutoMediaDownloader and media.consider (a profile's posts saved for offline reading: requests.md point 25)
+// A profile's posts are saved for offline reading like Home's (requests.md point 25): media.consider after a refresh and
+// after an older page.
 class FeedViewModel(
     private val repository: FeedRepository,
     private val accounts: AccountStore,
-    private val cache: FeedCache
+    private val cache: FeedCache,
+    private val media: AutoMediaDownloader
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -92,6 +95,8 @@ class FeedViewModel(
                         error = null,
                         pagingFailed = false
                     )
+                    // A profile's posts are saved for offline reading like Home's.
+                    media.consider(merged.posts)
                 }
                 is Outcome.Failure -> _state.value = _state.value.copy(
                     loading = false,
@@ -118,6 +123,7 @@ class FeedViewModel(
                         loadingMore = false,
                         pagingFailed = merged.posts.size <= before
                     )
+                    media.consider(merged.posts)
                 }
                 is Outcome.Failure -> _state.value = _state.value.copy(
                     loadingMore = false,
